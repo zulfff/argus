@@ -1,0 +1,29 @@
+[package]
+name = "argus-api"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+argus-common = { path = "../argus-common" }
+argus-core = { path = "../argus-core" }
+argus-observability = { path = "../argus-observability" }
+axum.workspace = true
+tokio.workspace = true
+tower.workspace = true
+tower-governor.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+reqwest.workspace = true
+futures.workspace = true
+anyhow.workspace = true
+prometheus.workspace = true
+async-trait.workspace = true
+jsonwebtoken = "9"
+argon2 = "0.5"
+axum-extra = { version = "0.9", features = ["typed-header"] }
+hyper = { version = "1", features = ["server"] }
+tower-http = { version = "0.6", features = ["cors", "auth"] }

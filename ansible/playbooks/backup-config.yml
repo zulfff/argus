@@ -1,0 +1,44 @@
+---
+- name: Backup VyOS Configuration
+  hosts: vyos_routers
+  gather_facts: false
+  connection: network_cli
+  vars:
+    backup_dir: "{{ lookup('env', 'ARGUS_BACKUP_DIR') | default('/var/backups/argus') }}"
+    retention_days: 90
+  tasks:
+    - name: Get running configuration
+      vyos.vyos.vyos_command:
+        commands:
+          - show configuration commands
+      register: running_config
+
+    - name: Create backup directory
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: '0700'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Save configuration backup
+      copy:
+        content: "{{ running_config.stdout[0] }}"
+        dest: "{{ backup_dir }}/{{ inventory_hostname }}-{{ ansible_date_time.iso8601_basic }}.cfg"
+      delegate_to: localhost
+
+    - name: Clean up old backups
+      find:
+        paths: "{{ backup_dir }}"
+        patterns: "{{ inventory_hostname }}-*.cfg"
+        age: "{{ retention_days }}d"
+      delegate_to: localhost
+      register: old_backups
+
+    - name: Remove expired backups
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ old_backups.files }}"
+      delegate_to: localhost
+      when: old_backups.files | length > 0

@@ -1,0 +1,413 @@
+openapi: "3.0.3"
+info:
+  title: ARGUS Firewall API
+  description: |
+    REST API for the ARGUS eBPF firewall and router automation platform.
+    All mutating endpoints require JWT authentication via Bearer token.
+  version: "0.1.0"
+  contact:
+    name: ARGUS Team
+    email: security@<your-org>
+
+servers:
+  - url: https://localhost:8443
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "OK"
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      operationId: getMetrics
+      security: []
+      responses:
+        "200":
+          description: Prometheus text format metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/v1/auth/login:
+    post:
+      summary: Login and receive JWT tokens
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: "admin"
+                password:
+                  type: string
+                  format: password
+                  example: "argus-admin"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/auth/refresh:
+    post:
+      summary: Refresh access token
+      operationId: refreshToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "200":
+          description: New access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/rules:
+    get:
+      summary: List all firewall rules
+      operationId: listRules
+      responses:
+        "200":
+          description: Rule list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RuleResponse"
+    post:
+      summary: Create a firewall rule
+      operationId: createRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRuleRequest"
+      responses:
+        "200":
+          description: Rule created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/rules/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get a specific rule
+      operationId: getRule
+      responses:
+        "200":
+          description: Rule details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleResponse"
+        "404":
+          description: Rule not found
+    put:
+      summary: Update a rule
+      operationId: updateRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRuleRequest"
+      responses:
+        "200":
+          description: Rule updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleResponse"
+    delete:
+      summary: Delete a rule
+      operationId: deleteRule
+      responses:
+        "200":
+          description: Rule deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: string
+                    format: uuid
+
+  /api/v1/stats:
+    get:
+      summary: Firewall statistics
+      operationId: getStats
+      responses:
+        "200":
+          description: Current statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsResponse"
+
+  /api/v1/connections:
+    get:
+      summary: Active connections
+      operationId: listConnections
+      responses:
+        "200":
+          description: Connection list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConnectionResponse"
+
+  /api/v1/block:
+    post:
+      summary: Manually block an IP
+      operationId: blockIp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ip]
+              properties:
+                ip:
+                  type: string
+                  format: ip
+      responses:
+        "200":
+          description: IP blocked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  blocked:
+                    type: string
+
+  /api/v1/block/{ip}:
+    parameters:
+      - name: ip
+        in: path
+        required: true
+        schema:
+          type: string
+          format: ip
+    delete:
+      summary: Unblock an IP
+      operationId: unblockIp
+      responses:
+        "200":
+          description: IP unblocked
+
+  /api/v1/ws:
+    get:
+      summary: WebSocket live event stream
+      operationId: wsHandler
+      responses:
+        "101":
+          description: WebSocket upgrade
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: JWT access token (15 min expiry)
+        refresh_token:
+          type: string
+          description: JWT refresh token (24h expiry)
+        token_type:
+          type: string
+          example: "Bearer"
+        expires_in:
+          type: integer
+          example: 900
+        role:
+          type: string
+          enum: [admin, operator, viewer]
+
+    RuleResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        action:
+          type: string
+          enum: [allow, deny, "rate-limit:Npps"]
+        direction:
+          type: string
+          enum: [inbound, outbound, forward]
+        src_cidr:
+          type: string
+          nullable: true
+          example: "10.0.0.0/8"
+        dst_cidr:
+          type: string
+          nullable: true
+        src_port:
+          type: integer
+          nullable: true
+        dst_port:
+          type: integer
+          nullable: true
+        protocol:
+          type: string
+          nullable: true
+          enum: [tcp, udp, icmp, icmpv6, any, "6", "17", "1", "58"]
+        priority:
+          type: integer
+          default: 100
+        enabled:
+          type: boolean
+          default: true
+
+    CreateRuleRequest:
+      type: object
+      required: [name, action, direction]
+      properties:
+        name:
+          type: string
+          example: "block-ssh-from-wan"
+        description:
+          type: string
+        action:
+          type: string
+          enum: [allow, deny, "rate-limit:Npps"]
+        direction:
+          type: string
+          enum: [inbound, outbound, forward]
+        src_cidr:
+          type: string
+        dst_cidr:
+          type: string
+        src_port:
+          type: integer
+        dst_port:
+          type: integer
+        protocol:
+          type: string
+        priority:
+          type: integer
+          default: 100
+        enabled:
+          type: boolean
+          default: true
+
+    StatsResponse:
+      type: object
+      properties:
+        packets_allowed:
+          type: integer
+          format: int64
+        packets_dropped:
+          type: integer
+          format: int64
+        active_connections:
+          type: integer
+        blocked_ips:
+          type: integer
+        rate_limit_buckets:
+          type: integer
+
+    ConnectionResponse:
+      type: object
+      properties:
+        src_ip:
+          type: string
+          format: ip
+        dst_ip:
+          type: string
+          format: ip
+        src_port:
+          type: integer
+        dst_port:
+          type: integer
+        protocol:
+          type: integer
+        state:
+          type: string
+          enum: [new, established, closing, closed]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: integer

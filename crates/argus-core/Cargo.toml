@@ -1,0 +1,25 @@
+[package]
+name = "argus-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+argus-common = { path = "../argus-common" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+reqwest.workspace = true
+sha2 = "0.10"
+hex = "0.4"
+wasmtime = { version = "28", optional = true }
+wasmparser = { version = "0.218", optional = true }
+
+[features]
+default = []
+wasm = ["wasmtime", "wasmparser"]

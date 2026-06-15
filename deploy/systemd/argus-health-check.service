@@ -1,0 +1,9 @@
+[Unit]
+Description=ARGUS WAN Health Check Service
+After=network.target argus-api.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/argus-cli --api-url http://localhost:8443 stats
+User=argus
+StandardOutput=journal

@@ -1,0 +1,26 @@
+/target/
+**/*.rs.bk
+*.pem
+
+# Node
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (never commit)
+.env
+*.env
+/etc/argus/env
+secrets/
+*.key
+*.pem

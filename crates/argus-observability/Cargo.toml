@@ -1,0 +1,15 @@
+[package]
+name = "argus-observability"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+argus-common = { path = "../argus-common" }
+prometheus.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+reqwest.workspace = true

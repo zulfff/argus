@@ -1,0 +1,88 @@
+---
+- name: Reconcile VyOS Firewall Configuration
+  hosts: "{{ target_hosts | default('vyos_routers') }}"
+  gather_facts: false
+  connection: network_cli
+  vars:
+    firewall_config: "{{ argus_firewall_config | default({}) }}"
+    dry_run: "{{ argus_dry_run | default(false) }}"
+
+  tasks:
+    - name: Backup current configuration
+      vyos.vyos.vyos_command:
+        commands:
+          - show configuration commands
+      register: current_config
+      changed_when: false
+      tags: [backup, always]
+
+    - name: Save backup to local file
+      copy:
+        content: "{{ current_config.stdout[0] }}"
+        dest: "{{ backup_dir | default('/var/backups/argus') }}/vyos-{{ inventory_hostname }}-{{ ansible_date_time.iso8601 }}.cfg"
+      delegate_to: localhost
+      changed_when: false
+      tags: [backup]
+
+    - name: Load provided firewall configuration
+      vyos.vyos.vyos_firewall_rules:
+        config: "{{ firewall_config }}"
+      when: firewall_config != {}
+      tags: [firewall]
+      notify: commit config
+
+    - name: Check for config changes
+      vyos.vyos.vyos_command:
+        commands:
+          - compare saved
+      register: config_diff
+      changed_when: config_diff.stdout[0] != ''
+      tags: [verify]
+
+    - name: Display proposed changes
+      debug:
+        msg: |
+          === PROPOSED CONFIGURATION CHANGES ===
+          {{ config_diff.stdout[0] }}
+      when: config_diff.stdout[0] != ''
+      tags: [verify]
+
+    - name: Fail on changes if not approved
+      fail:
+        msg: >
+          Configuration changes detected but auto-apply is disabled.
+          Review changes above and set argus_auto_apply=true to proceed.
+      when:
+        - config_diff.stdout[0] != ''
+        - not (argus_auto_apply | default(false)) | bool
+        - not dry_run | bool
+      tags: [verify]
+
+  handlers:
+    - name: commit config
+      vyos.vyos.vyos_command:
+        commands:
+          - commit comment "argus-orchestrator: automated firewall reconciliation"
+      tags: [commit]
+
+    - name: save config
+      vyos.vyos.vyos_command:
+        commands:
+          - save
+      tags: [save, commit]
+
+  post_tasks:
+    - name: Health check after config change
+      vyos.vyos.vyos_command:
+        commands:
+          - "show firewall name {{ item.name }} statistics"
+      loop: "{{ firewall_config.get('firewall', {}).get('name', []) }}"
+      when: config_diff.stdout[0] != ''
+      tags: [health_check]
+
+    - name: Rollback on health check failure
+      vyos.vyos.vyos_command:
+        commands:
+          - rollback 1
+      when: false
+      tags: [rollback, never]

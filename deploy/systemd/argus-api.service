@@ -1,0 +1,27 @@
+[Unit]
+Description=ARGUS Firewall API Server
+After=network.target postgresql.service redis.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=argus
+Group=argus
+WorkingDirectory=/opt/argus
+ExecStart=/usr/local/bin/argus-api
+Restart=always
+RestartSec=5
+Environment=RUST_LOG=argus=info
+Environment=ARGUS_JWT_SECRET=%JWT_SECRET%
+EnvironmentFile=/etc/argus/env
+AmbientCapabilities=CAP_NET_ADMIN CAP_SYS_ADMIN
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/sys/fs/bpf /opt/argus/data
+PrivateTmp=yes
+MemoryMax=512M
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target

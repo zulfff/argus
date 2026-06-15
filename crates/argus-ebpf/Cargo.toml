@@ -1,0 +1,12 @@
+[package]
+name = "argus-ebpf"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aya-ebpf = "0.1"
+aya-log-ebpf = "0.1"
+network-types = "0.0.8"
+
+[features]
+default = []

@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/argus-common",
+    "crates/argus-ebpf",
+    "crates/argus-core",
+    "crates/argus-api",
+    "crates/argus-orchestrator",
+    "crates/argus-observability",
+    "crates/argus-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+anyhow = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "uuid", "chrono"] }
+axum = { version = "0.7", features = ["ws", "macros"] }
+tonic = "0.12"
+prost = "0.13"
+clap = { version = "4", features = ["derive"] }
+ratatui = "0.28"
+prometheus = { version = "0.13", features = ["process"] }
+opentelemetry = "0.27"
+opentelemetry-otlp = "0.27"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+redis = { version = "0.27", features = ["tokio-comp"] }
+rustls = "0.23"
+zeroize = { version = "1", features = ["derive"] }
+subtle = "2"
+tower-governor = { version = "0.4", package = "tower_governor" }
+tower = { version = "0.5", features = ["util"] }
+async-trait = "0.1"
+futures = "0.3"
+proptest = "1"
+criterion = { version = "0.5", features = ["html_reports"] }

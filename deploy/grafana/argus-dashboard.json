@@ -1,0 +1,159 @@
+{
+  "dashboard": {
+    "title": "ARGUS Firewall Overview",
+    "uid": "argus-main",
+    "tags": ["argus", "firewall", "ebpf", "networking"],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "panels": [
+      {
+        "id": 1,
+        "title": "Packets Processed",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 7 },
+        "targets": [
+          {
+            "expr": "rate(argus_packets_allowed_total[5m])",
+            "legendFormat": "Allowed - {{interface}}"
+          },
+          {
+            "expr": "rate(argus_packets_dropped_total[5m])",
+            "legendFormat": "Dropped - {{interface}} ({{reason}})"
+          }
+        ],
+        "yaxes": [
+          { "label": "packets/sec", "format": "pps" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Dropped Packets by Reason",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 7 },
+        "targets": [
+          {
+            "expr": "rate(argus_packets_dropped_total[5m])",
+            "legendFormat": "{{reason}} on {{interface}}"
+          }
+        ],
+        "yaxes": [
+          { "label": "drops/sec", "format": "pps" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Active Connections",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 7, "w": 8, "h": 6 },
+        "targets": [
+          {
+            "expr": "argus_active_connections",
+            "legendFormat": "{{state}}"
+          }
+        ],
+        "yaxes": [
+          { "label": "connections", "format": "short" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Blocked IPs",
+        "type": "stat",
+        "gridPos": { "x": 8, "y": 7, "w": 4, "h": 6 },
+        "targets": [
+          {
+            "expr": "argus_blocked_ips",
+            "legendFormat": "{{reason}}"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "textMode": "auto"
+        }
+      },
+      {
+        "id": 5,
+        "title": "Rate Limited Packets",
+        "type": "stat",
+        "gridPos": { "x": 12, "y": 7, "w": 4, "h": 6 },
+        "targets": [
+          {
+            "expr": "rate(argus_packets_rate_limited_total[5m])",
+            "legendFormat": "{{interface}}"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "textMode": "name"
+        }
+      },
+      {
+        "id": 6,
+        "title": "Rule Hit Frequency",
+        "type": "bargauge",
+        "gridPos": { "x": 16, "y": 7, "w": 8, "h": 6 },
+        "targets": [
+          {
+            "expr": "rate(argus_rule_hits_total[5m]) * 60",
+            "legendFormat": "{{rule_name}}"
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient"
+        }
+      },
+      {
+        "id": 7,
+        "title": "Top Dropped Source IPs (last 15m)",
+        "type": "table",
+        "gridPos": { "x": 0, "y": 13, "w": 12, "h": 6 },
+        "targets": [
+          {
+            "expr": "topk(10, sum by (source_ip) (rate(argus_packets_dropped_total[15m])))",
+            "legendFormat": "{{source_ip}}",
+            "format": "table"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "API Request Rate & Errors",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 13, "w": 12, "h": 6 },
+        "targets": [
+          {
+            "expr": "rate(argus_api_requests_total[5m])",
+            "legendFormat": "{{method}} {{path}}"
+          },
+          {
+            "expr": "rate(argus_api_errors_total[5m])",
+            "legendFormat": "errors {{method}} {{path}}"
+          }
+        ],
+        "yaxes": [
+          { "label": "req/sec", "format": "short" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Config Drift Alerts",
+        "type": "table",
+        "gridPos": { "x": 0, "y": 19, "w": 24, "h": 5 },
+        "targets": [
+          {
+            "expr": "argus_config_drift_total",
+            "legendFormat": "{{device}}",
+            "format": "table"
+          }
+        ]
+      }
+    ]
+  }
+}

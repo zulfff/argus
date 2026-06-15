@@ -1,0 +1,41 @@
+---
+- name: ARGUS Health Check - All VyOS Devices
+  hosts: vyos_routers
+  gather_facts: false
+  connection: network_cli
+  tasks:
+    - name: Verify device reachable
+      vyos.vyos.vyos_ping:
+        dest: 1.1.1.1
+        count: 1
+      register: ping_result
+      ignore_errors: true
+
+    - name: Check firewall status
+      vyos.vyos.vyos_command:
+        commands:
+          - show firewall statistics
+      register: fw_stats
+
+    - name: Check interface status
+      vyos.vyos.vyos_command:
+        commands:
+          - show interfaces summary
+      register: iface_status
+
+    - name: Report health status
+      set_fact:
+        device_healthy: "{{ ping_result.failed == false }}"
+        cacheable: true
+
+    - name: Alert on unhealthy device
+      debug:
+        msg: "CRITICAL: {{ inventory_hostname }} is UNREACHABLE!"
+      when: not device_healthy
+
+    - name: Report summary
+      debug:
+        msg: |
+          === Health Check: {{ inventory_hostname }} ===
+          Reachable: {{ device_healthy }}
+          {{ fw_stats.stdout[0] | default('no firewall stats') }}
