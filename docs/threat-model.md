@@ -131,8 +131,8 @@ manipulate maps. Trust level: **OS-enforced**.
 
 If you discover a security issue in ARGUS, please report it via:
 
-- **Email:** `security@<your-org>` (replace with contact)
-- **PGP Key:** (provide fingerprint)
+- **Email:** `arjunaajalahla100@gmail.com` (replace with contact)
+- **PGP Key:** 
 
 **Response targets:**
 - Acknowledgment: within 48 hours

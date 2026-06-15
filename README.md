@@ -139,8 +139,8 @@ argus/
 
 If you discover a security vulnerability in ARGUS, please report it via:
 
-- **Email:** `security@<your-org>` (replace with your contact)
-- **PGP Key:** (provide your PGP fingerprint)
+- **Email:** `arjunaajalahla100@gmail.com` 
+- **PGP Key:** 
 
 We aim to acknowledge reports within 48 hours and provide a fix timeline within
 5 business days. Do NOT open public issues for security vulnerabilities.
