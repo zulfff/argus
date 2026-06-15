@@ -305,17 +305,27 @@ async fn try_main() -> anyhow::Result<()> {
 
 async fn shutdown_signal() {
     let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
+        match signal::ctrl_c().await {
+            Ok(()) => info!("Ctrl+C received"),
+            Err(e) => {
+                warn!("Cannot install Ctrl+C handler (container?): {}. Using SIGTERM only.", e);
+                std::future::pending::<()>().await;
+            }
+        }
     };
 
     #[cfg(unix)]
     let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
+        match signal::unix::signal(signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+                info!("SIGTERM received");
+            }
+            Err(e) => {
+                warn!("Cannot install SIGTERM handler (container?): {}. Use Ctrl+C.", e);
+                std::future::pending::<()>().await;
+            }
+        }
     };
 
     #[cfg(not(unix))]
@@ -326,5 +336,5 @@ async fn shutdown_signal() {
         _ = terminate => {},
     }
 
-    info!("signal received, starting graceful shutdown");
+    info!("Signal received, starting graceful shutdown");
 }
