@@ -204,9 +204,20 @@ fn generate_secret() -> Vec<u8> {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+async fn main() {
+    tracing_subscriber::fmt().with_target(false).init();
 
+    info!("ARGUS v0.1.1 starting...");
+
+    if let Err(e) = try_main().await {
+        error!("Fatal startup error: {:#}", e);
+        eprintln!("\n  Failed to start: {}\n", e);
+        std::process::exit(1);
+    }
+}
+
+async fn try_main() -> anyhow::Result<()> {
+    info!("Initializing engines...");
     let store = Arc::new(rule_store::InMemoryRuleStore::new());
     let rule_engine = RuleEngine::new(store);
     let connection_tracker = ConnectionTracker::new(65536, 30);
@@ -215,7 +226,9 @@ async fn main() -> anyhow::Result<()> {
     let metrics = ArgusMetrics::new();
     let event_bus = LiveEventBus::new(1024);
     let audit_log = AuditLog::new();
+    info!("Engines initialized");
 
+    info!("Setting up JWT secret...");
     let jwt_secret = match std::env::var("ARGUS_JWT_SECRET") {
         Ok(s) if s.len() >= 32 => {
             info!("Using JWT secret from ARGUS_JWT_SECRET env var");
@@ -274,7 +287,14 @@ async fn main() -> anyhow::Result<()> {
     let app = app(state);
 
     let listener = TcpListener::bind("0.0.0.0:8443").await?;
-    info!("argus-api listening on 0.0.0.0:8443");
+    info!("Ready. Listening on http://0.0.0.0:8443");
+    eprintln!("\n  ========================================");
+    eprintln!("  ARGUS API — http://127.0.0.1:8443");
+    eprintln!("  Health:     http://127.0.0.1:8443/health");
+    eprintln!("  Metrics:    http://127.0.0.1:8443/metrics");
+    eprintln!("  Admin user: {}", admin_user);
+    eprintln!("  Admin pass: {}", admin_pass);
+    eprintln!("  ========================================\n");
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
