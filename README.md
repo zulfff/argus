@@ -18,7 +18,7 @@ routers, and full observability — all in Rust, all memory-safe.
 - **Web Dashboard** — Custom cyberpunk/terminal SvelteKit UI (not Tailwind, not AI-generated) with live stats, rule builder, connection tracker
 - **CLI + TUI** — clap CLI + ratatui live terminal monitor
 - **Auth + RBAC** — JWT (HS256, iss/aud/nbf, 5s leeway), Admin/Operator/Viewer roles, auto-wired middleware on all routes
-- **AI Anomaly Detection** — statistical baseline computation (z-score), on-box, no cloud dependency
+- **Statistical Anomaly Detection** — statistical baseline computation (z-score), on-box, no cloud dependency
 - **Threat Intelligence** — auto-sync Spamhaus DROP/EDROP + AbuseIPDB
 - **GitOps** — firewall rules in Git, CI validation, auto-apply
 - **ZTNA Mesh** — WireGuard overlay with identity-aware policy engine

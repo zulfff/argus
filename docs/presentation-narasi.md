@@ -17,7 +17,7 @@ Singkatnya: ARGUS menggabungkan empat hal yang biasanya terpisah:
 1. Firewall kernel-level (eBPF/XDP)
 2. Otomasi router (NetBox + VyOS + Ansible)
 3. Observability penuh (Prometheus/Grafana/Loki)
-4. Fitur AI untuk deteksi anomali
+4. Fitur deteksi anomali berbasis statistik
 
 Nama ARGUS sendiri terinspirasi dari mitologi Yunani — Argus Panoptes, raksasa
 bermata seratus yang selalu waspada. Cocok buat sistem yang memonitor seluruh
@@ -44,7 +44,7 @@ Semua jalan sebelum kernel sentuh packet — zero memory allocation.
 
 **Layer 3 — Control Plane.** Logic bisnis ARGUS. Di sini ada 11 modul:
 RuleEngine buat evaluasi rules CIDR, ConnectionTracker buat tracking koneksi,
-RateLimiter, ScanDetector buat deteksi port scanning, AnomalyDetector buat AI,
+RateLimiter, ScanDetector buat deteksi port scanning, AnomalyDetector buat deteksi statistik,
 ThreatIntelligence sync dari Spamhaus, GitOps engine, ZTNA WireGuard mesh,
 WASM plugin system, AuditLog hash-chained, MultiWAN failover.
 
@@ -294,14 +294,15 @@ satu dashboard."
 
 ---
 
-## Slide 10: AI Anomaly Detection — Bukan Sekadar Threshold
+## Slide 10: Statistical Anomaly Detection — Bukan Sekadar Threshold
 
 **Narasi:**
 "Banyak firewall cuma pake static threshold — misalnya 'kalau lebih dari 1000
 packet/detik, anggap serangan'. Masalahnya traffic normal setiap network
 berbeda-beda. Jam sibuk vs jam sepi. Weekday vs weekend.
 
-ARGUS pake statistical anomaly detection. Cara kerjanya:
+ARGUS pake statistical anomaly detection — bukan AI, bukan machine learning.
+Murni statistik: mean, standard deviation, z-score. Cara kerjanya:
 
 1. Setiap 5 detik, ARGUS nyatet sample traffic: packets per second,
    bytes per second, connection count, unique ports.
@@ -327,7 +328,7 @@ Detection-nya mencakup:
 Semua alert masuk ke event bus → WebSocket → frontend → notifikasi.
 
 BONUS: ini semua jalan ON-BOX. Gak ada data traffic yang keluar dari network
-loe. Machine learning-nya pake library `linfa` (Rust-native ML) — jadi gak
+loe. Semua perhitungan statistik jalan lokal — jadi gak
 ada cloud dependency. Privacy-preserving by design."
 
 ---
@@ -656,14 +657,14 @@ development, testing, atau dokumentasi — silakan buka issue atau PR."
 **Narasi:**
 "Kesimpulannya, ARGUS adalah:
 
-- **Unified platform** — firewall + router automation + observability + AI
+- **Unified platform** — firewall + router automation + observability + statistik
   dalam satu sistem
 - **Memory safe** — Rust dari kernel space sampe frontend
 - **High performance** — eBPF/XDP line-rate filtering
 - **Production-ready security** — JWT, RBAC, audit log hash-chained,
   wasmtime sandbox, circuit breaker
 - **Infrastructure as Code** — GitOps untuk firewall rules
-- **Different by design** — AI anomaly detection, threat intel auto-sync,
+- **Different by design** — anomali berbasis statistik, threat intel auto-sync,
   ZTNA WireGuard mesh, WASM plugin extensibility
 
 Kode tersedia di GitHub: `github.com/zulfff/argus`
@@ -841,7 +842,7 @@ ARGUS berbeda di 3 hal:
 1. **eBPF/XDP** — pf gak punya ini. Drop packet di NIC driver level.
 2. **Infrastructure as Code** — rules firewall di-manage via Git + CI/CD,
    bukan klik-klik WebGUI.
-3. **AI & Threat Intel** — anomaly detection on-box, auto-sync blocklist."
+3. **Statistical Detection & Threat Intel** — anomaly detection on-box, auto-sync blocklist."
 
 ---
 
@@ -914,7 +915,7 @@ numpuk. Gak makan memory."
 "Bisa. ARGUS cocok buat:
 - **Tugas akhir / skripsi** — topik networking, security, atau Rust
 - **Portfolio** — tunjukin loe bisa full-stack: kernel programming,
-  REST API, frontend, observability, AI/ML, DevOps
+  REST API, frontend, observability, statistik, DevOps
 - **Research** — eBPF research, firewall automation, anomaly detection
 - **Production** — deploy di router edge kantor atau data center"
 
