@@ -712,3 +712,238 @@ connection tracking, 65.536 untuk blocklist.
 A: Ya, eBPF program detect EtherType IPv4 vs IPv6. Rule engine support CIDR
 matching untuk IPv6 (128-bit bitmask). Connection tracking dan rate limiting
 juga support IPv6.
+
+---
+
+# JAWABAN CEPAT — Pertanyaan Dadakan Guru / Penguji
+
+> Bagian ini buat loe yang tiba-tiba ditanya. Jawab singkat, padat, jangan
+> mikir lama. Hafalin bullet points-nya.
+
+---
+
+## "Kenapa pakai eBPF?"
+
+**Jawaban 30 detik:**
+
+"Karena eBPF jalan di XDP hook — layer paling awal di Linux networking stack,
+sebelum kernel alokasi memory buat packet. Jadi filtering terjadi di NIC
+driver level. Hasilnya: **line-rate performance** — bisa filter 10Gbps, 40Gbps,
+100Gbps dengan overhead CPU hampir nol. Bandingkan sama iptables yang jalan
+di netfilter hook setelah kernel alokasi SKB — bisa 10x lebih lambat."
+
+**Kalau disuruh elaborate (1 menit):**
+
+Tiga alasan utama:
+1. **Posisi.** XDP hook ada sebelum kernel allocates SKB, sebelum routing,
+   sebelum iptables. Drop di sini = zero memory allocation.
+2. **Keamanan.** BPF verifier memastikan program gak crash kernel — semua
+   memory access di-bounds-check, semua loop harus bounded, gak ada
+   pointer dereference liar.
+3. **Observability.** BPF maps bisa dibaca dari userspace real-time via
+   bpf() syscall. Jadi stats packet per CPU, connection count, blocklist
+   hits — semua bisa diekspos ke Prometheus tanpa parsing log file.
+
+**Data point konkret:**
+XDP bisa process 10+ juta packet per detik per core. iptables dengan 1000
+rules mulai drop di ~1 juta pps. Selisih 10x, dan semakin banyak rules
+semakin lebar gapnya — karena iptables linear scan, XDP hashmap lookup O(1).
+
+---
+
+## "Kenapa pakai WireGuard?"
+
+**Jawaban 30 detik:**
+
+"WireGuard itu cuma **4000 baris kode** — bisa di-audit penuh dalam sehari.
+Bandingkan sama IPsec yang puluhan ribu baris, atau OpenVPN yang lebih
+kompleks lagi. WireGuard juga **built-in di Linux kernel 5.6+** —
+no userspace daemon, no context switch. Performance-nya 3–5x lebih cepat
+dari OpenVPN. Dan cryptography-nya modern: Curve25519, ChaCha20, Poly1305,
+BLAKE2s — gak ada cipher legacy kayak AES-CBC atau SHA1."
+
+**Kalau disuruh elaborate:**
+
+1. **Auditable.** 4000 lines vs IPsec (100k+). Tim security bisa baca
+   seluruh kode dalam sehari. Gak ada hidden complexity.
+2. **Kernel-native.** Jalan di kernel space, bukan userspace daemon.
+   Zero context switch buat encrypt/decrypt. Throughput 101% line-rate
+   di gigabit link.
+3. **Modern crypto.** Hanya support cipher paling aman — gak bisa
+   downgrade ke cipher lemah. No negotiation, no handshake state machine
+   yang bisa di-attack.
+4. **Roaming.** Gak ada konsep "connection" — client bisa pindah IP
+   (WiFi ke 4G) tanpa reconnect. Cocok buat mobile.
+5. **Di ARGUS:** WireGuard config di-generate otomatis dari policy
+   engine. Gak perlu manual config peer satu-satu.
+
+---
+
+## "Kenapa gak nftables?"
+
+**Jawaban 30 detik:**
+
+"Nftables emang penerus iptables, lebih modern, syntax lebih bersih. Tapi
+dia tetap jalan di **netfilter hook** — bukan di XDP. Artinya tetap ada
+overhead alokasi SKB, tetap ada routing decision sebelum filtering. Untuk
+traffic 1-10Gbps masih ok, tapi untuk 40Gbps ke atas, XDP yang menang.
+
+Selain itu, nftables **gak punya observability native**. Lo harus baca
+`/proc/net/netfilter/` atau jalanin `nft list ruleset` dan parse outputnya.
+Di ARGUS, stats dari BPF maps langsung ke Prometheus — real-time, terstruktur.
+
+Terakhir: nftables itu **konfigurasi manual**. Gak ada integrasi otomatis
+dengan NetBox, gak ada GitOps, gak ada config drift detection. ARGUS bisa
+reconcile rules dari NetBox ke VyOS otomatis — kalau ada drift, auto-fix."
+
+**Kalau disuruh elaborate:**
+
+| Aspek | nftables | ARGUS (eBPF) |
+|-------|-----------|-------------|
+| Hook | Netfilter (setelah routing) | XDP (NIC driver level) |
+| Perf 10Gbps+ | Mulai bottleneck | Line-rate |
+| Rules | Manual edit `/etc/nftables.conf` | REST API + GitOps + auto-sync |
+| Observability | Parse `/proc` | Prometheus native metrics |
+| Atomic update | `nft -f` (restart ruleset) | Hot-reload BPF map (no drops) |
+| Threat intel | Manual | Auto-sync Spamhaus/AbuseIPDB |
+| Audit | Syslog text file | Hash-chained, tamper-evident |
+| Language | C (kernel module risk) | Rust (memory safety) |
+
+**Analoginya:** nftables itu kayak kalkulator scientific — powerful tapi
+manual. ARGUS itu kayak smartphone — semua terintegrasi, otomatis, dan
+observable.
+
+---
+
+## "Kenapa pakai Rust?"
+
+**Jawaban 30 detik:**
+
+"Karena ARGUS berinteraksi langsung dengan kernel via eBPF. Satu memory bug
+— buffer overflow, use-after-free — bisa **crash kernel**, bukan cuma crash
+aplikasi. Rust eliminates entire class of memory bugs at compile time.
+No null pointers, no dangling references. Borrow checker adalah static
+analyzer built-in."
+
+**Data point:** Microsoft: 70% of CVEs are memory safety bugs. Android:
+90% of kernel bugs are memory safety. Rust prevents these by construction.
+
+---
+
+## "Apa bedanya sama pfSense / OPNsense / MikroTik?"
+
+**Jawaban 30 detik:**
+
+"pfSense dan OPNsense bagus — mereka mature, community besar. Tapi mereka
+berbasis FreeBSD + pf — bukan Linux, bukan eBPF. MikroTik proprietary.
+ARGUS berbeda di 3 hal:
+
+1. **eBPF/XDP** — pf gak punya ini. Drop packet di NIC driver level.
+2. **Infrastructure as Code** — rules firewall di-manage via Git + CI/CD,
+   bukan klik-klik WebGUI.
+3. **AI & Threat Intel** — anomaly detection on-box, auto-sync blocklist."
+
+---
+
+## "Ini beneran production-ready?"
+
+**Jawaban jujur:**
+
+"Versi 0.1.0 ini production-ready untuk **userspace components**. API, auth,
+rule engine, audit log, NetBox/VyOS integration — ini udah tested dan punya
+error handling yang proper. Yang belum: eBPF data plane butuh nightly Rust
+buat compile, dan belum ada integration tests dengan hardware nyata. Target
+v0.3 untuk full production deployment."
+
+---
+
+## "Gimana cara testing-nya? Ada unit test?"
+
+**Jawaban:**
+
+"40 unit tests, semua passing. Coverage: rule engine (CIDR matching, protocol
+matching, priority ordering), connection tracker (upsert, LRU eviction, state
+transitions), rate limiter (token consumption, refill), scan detector (port
+scan detection, auto-block), anomaly detector (baseline computation, spike
+detection), threat intelligence (DROP list parsing, GC), audit log (hash
+chain verification, tamper detection), ZTNA (policy evaluation, WireGuard
+config generation), multi-WAN (link registration, duplicate prevention).
+
+Plus clippy strict mode (-D warnings) — zero warnings, zero unwrap()."
+
+---
+
+## "Kok bisa dapet data threat intelligence?"
+
+**Jawaban:**
+
+"Dua sumber:
+
+1. **Spamhaus DROP/EDROP** — gratis, publik, format teks sederhana.
+   ARGUS fetch setiap jam, parse CIDR, masukin ke BLOCKLIST map.
+
+2. **AbuseIPDB** — perlu API key (gratis untuk usage rendah). ARGUS
+   query blacklist dengan confidence threshold (misal >90%), hasilnya
+   langsung populate eBPF map.
+
+Semua entry punya TTL 24 jam — setelah expire otomatis dihapus. Gak
+numpuk. Gak makan memory."
+
+---
+
+## "WASM plugin-nya aman? Gimana kalau plugin malicious?"
+
+**Jawaban:**
+
+"Tiga layer proteksi:
+
+1. **Sandbox by default.** Plugin gak bisa akses filesystem, network,
+   atau memory host. Wasmtime enforce ini.
+2. **Fuel metering.** ARGUS ngasih 100.000 fuel units. Plugin infinite
+   loop → fuel habis → wasmtime kill. Gak bisa CPU exhaustion.
+3. **Metadata only.** Plugin cuma terima FlowMetadata (src_ip, dst_ip,
+   port, protocol — string semua) — bukan raw packet. Jadi gak bisa
+   sniffing data, gak bisa exfiltrate payload."
+
+---
+
+## "Ini project buat apa? Tugas akhir?"
+
+**Jawaban:**
+
+"Bisa. ARGUS cocok buat:
+- **Tugas akhir / skripsi** — topik networking, security, atau Rust
+- **Portfolio** — tunjukin loe bisa full-stack: kernel programming,
+  REST API, frontend, observability, AI/ML, DevOps
+- **Research** — eBPF research, firewall automation, anomaly detection
+- **Production** — deploy di router edge kantor atau data center"
+
+---
+
+## "Dari mana inspirasi project ini?"
+
+**Jawaban singkat:**
+
+"Dari proyek real production: **Cloudflare** (XDP untuk DDoS mitigation),
+**Cilium** (eBPF untuk Kubernetes networking), **Facebook** (XDP untuk load
+balancer). Mereka semua pake eBPF di production skala global. ARGUS nge-apply
+teknologi yang sama untuk use-case yang berbeda: router edge / firewall."
+
+---
+
+## "Apa hal paling susah selama development?"
+
+**Jawaban:**
+
+"Tiga hal:
+
+1. **eBPF + Rust.** Belum banyak referensi. aya-ebpf masih young ecosystem.
+   `#![no_std]` constraint di kernel space lumayan challenging.
+
+2. **Integrasi.** Nyambungin 4 sistem berbeda (NetBox API, VyOS API,
+   Ansible subprocess, Prometheus metrics) — semuanya harus handle error
+   gracefully, retry, circuit breaker.
+
+3. **RAM terbatas.** Develop di WSL dengan 4GB RAM DDR4. Gak bisa compile
+   eBPF karena butuh nightly toolchain. Harus pinter-pinter manage memory
+   pas cargo build."
