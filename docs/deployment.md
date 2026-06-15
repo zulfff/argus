@@ -18,7 +18,36 @@
 
 ## Deployment Methods
 
-### Option 1: Bare-Metal / VyOS Router
+### 🚀 Option 1: One-Command Router Install (Recommended)
+
+```bash
+curl -sSL https://raw.githubusercontent.com/zulfff/argus/main/scripts/install-router.sh | sudo bash
+```
+
+That's it. The script:
+- Detects your OS (Debian/Ubuntu/VyOS) and kernel version
+- Installs minimal dependencies (curl, ca-certificates)
+- Installs Rust if not present
+- Clones the repo, builds release binaries (`argus-api` + `argus-cli`)
+- Generates secure random secrets (JWT key, admin password)
+- Creates `argus` system user
+- Installs systemd service with hardening (ProtectSystem=strict, NoNewPrivileges)
+- Sets up health check timer
+- Starts the API server
+
+After install:
+```bash
+argus-cli stats                          # Verify
+journalctl -u argus-api -f               # View logs
+systemctl restart argus-api              # Restart
+```
+
+To uninstall:
+```bash
+curl -sSL https://raw.githubusercontent.com/zulfff/argus/main/scripts/uninstall.sh | sudo bash
+```
+
+### Option 2: Pre-built Binary (Release)
 
 ```bash
 # 1. Install system dependencies
