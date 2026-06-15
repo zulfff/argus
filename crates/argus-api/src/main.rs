@@ -50,12 +50,24 @@ fn protected_routes() -> Router<Arc<AppState>> {
         .route("/rules", axum::routing::get(routes::rules::list_rules))
         .route("/rules", axum::routing::post(routes::rules::create_rule))
         .route("/rules/{id}", axum::routing::get(routes::rules::get_rule))
-        .route("/rules/{id}", axum::routing::put(routes::rules::update_rule))
-        .route("/rules/{id}", axum::routing::delete(routes::rules::delete_rule))
+        .route(
+            "/rules/{id}",
+            axum::routing::put(routes::rules::update_rule),
+        )
+        .route(
+            "/rules/{id}",
+            axum::routing::delete(routes::rules::delete_rule),
+        )
         .route("/stats", axum::routing::get(routes::stats::get_stats))
-        .route("/connections", axum::routing::get(routes::connections::list_connections))
+        .route(
+            "/connections",
+            axum::routing::get(routes::connections::list_connections),
+        )
         .route("/block", axum::routing::post(routes::block::block_ip))
-        .route("/block/{ip}", axum::routing::delete(routes::block::unblock_ip))
+        .route(
+            "/block/{ip}",
+            axum::routing::delete(routes::block::unblock_ip),
+        )
         .route("/ws", axum::routing::get(websocket::ws_handler))
 }
 
@@ -68,16 +80,29 @@ pub fn app(state: Arc<AppState>) -> Router {
             .expect("failed to build rate limiter config"),
     );
 
-    let protected = protected_routes()
-        .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
+    let protected = protected_routes().route_layer(middleware::from_fn_with_state(
+        state.clone(),
+        auth_middleware,
+    ));
 
     Router::new()
         .route("/health", axum::routing::get(|| async { "OK" }))
-        .route("/api/v1/auth/login", axum::routing::post(routes::auth_routes::login))
-        .route("/api/v1/auth/refresh", axum::routing::post(routes::auth_routes::refresh))
-        .route("/metrics", axum::routing::get(routes::metrics::metrics_handler))
+        .route(
+            "/api/v1/auth/login",
+            axum::routing::post(routes::auth_routes::login),
+        )
+        .route(
+            "/api/v1/auth/refresh",
+            axum::routing::post(routes::auth_routes::refresh),
+        )
+        .route(
+            "/metrics",
+            axum::routing::get(routes::metrics::metrics_handler),
+        )
         .nest("/api/v1", protected)
-        .layer(GovernorLayer { config: governor_config })
+        .layer(GovernorLayer {
+            config: governor_config,
+        })
         .with_state(state)
 }
 
@@ -252,7 +277,10 @@ async fn shutdown_signal() {
         match signal::ctrl_c().await {
             Ok(()) => info!("Ctrl+C received"),
             Err(e) => {
-                warn!("Cannot install Ctrl+C handler (container?): {}. Using SIGTERM only.", e);
+                warn!(
+                    "Cannot install Ctrl+C handler (container?): {}. Using SIGTERM only.",
+                    e
+                );
                 std::future::pending::<()>().await;
             }
         }
@@ -266,7 +294,10 @@ async fn shutdown_signal() {
                 info!("SIGTERM received");
             }
             Err(e) => {
-                warn!("Cannot install SIGTERM handler (container?): {}. Use Ctrl+C.", e);
+                warn!(
+                    "Cannot install SIGTERM handler (container?): {}. Use Ctrl+C.",
+                    e
+                );
                 std::future::pending::<()>().await;
             }
         }
