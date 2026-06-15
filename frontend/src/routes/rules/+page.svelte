@@ -27,76 +27,129 @@
       await apiFetch('/rules', { method: 'POST', body: JSON.stringify(payload) });
       rules = await apiFetch('/rules');
       showForm = false;
-    } catch (e) { alert('Failed: ' + e.message); }
+      form = { name: '', action: 'deny', direction: 'inbound', src_cidr: '', dst_cidr: '', protocol: '', src_port: '', dst_port: '', priority: 100, enabled: true };
+    } catch (e) { alert('Error: ' + e.message); }
   }
 
   async function deleteRule(id) {
-    if (!confirm('Delete rule?')) return;
+    if (!confirm('DROP rule ' + id + '?')) return;
     try {
-      await apiFetch(`/rules/${id}`, { method: 'DELETE' });
+      await apiFetch('/rules/' + id, { method: 'DELETE' });
       rules = await apiFetch('/rules');
-    } catch (e) { alert('Failed: ' + e.message); }
+    } catch (e) { alert('Error: ' + e.message); }
   }
 </script>
 
-<div class="flex justify-between items-center mb-4">
-  <h1 class="text-lg font-bold text-gray-200">Firewall Rules ({rules.length})</h1>
-  <button onclick={() => (showForm = !showForm)} class="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-1.5 rounded text-sm">
-    + Add Rule
+<div class="flex justify-between items-center mb-6 animate-in">
+  <div>
+    <h1 style="font-family:var(--font-display);font-size:18px;color:var(--text-heading);letter-spacing:2px;text-transform:uppercase;">
+      ⚙ Firewall Rules
+    </h1>
+    <span style="font-size:10px;color:var(--text-muted);letter-spacing:1px;">{rules.length} RULES LOADED</span>
+  </div>
+  <button class="btn btn-primary" onclick={() => showForm = !showForm}>
+    {showForm ? '✕ CANCEL' : '+ ADD RULE'}
   </button>
 </div>
 
 {#if showForm}
-  <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 mb-4 grid grid-cols-4 gap-3 text-sm">
-    <input bind:value={form.name} placeholder="Rule name" class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-gray-200 col-span-2">
-    <select bind:value={form.action} class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-gray-200">
-      <option value="deny">deny</option>
-      <option value="allow">allow</option>
-    </select>
-    <select bind:value={form.direction} class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-gray-200">
-      <option value="inbound">inbound</option>
-      <option value="outbound">outbound</option>
-      <option value="forward">forward</option>
-    </select>
-    <input bind:value={form.src_cidr} placeholder="Source CIDR (optional)" class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-gray-200">
-    <input bind:value={form.dst_cidr} placeholder="Dest CIDR (optional)" class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-gray-200">
-    <input bind:value={form.protocol} placeholder="Protocol (tcp/udp/icmp)" class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-gray-200">
-    <input bind:value={form.src_port} placeholder="Src port" class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-gray-200">
-    <div class="col-span-4 flex gap-3">
-      <button onclick={createRule} class="bg-green-600 hover:bg-green-500 text-white px-4 py-1.5 rounded">Save</button>
-      <button onclick={() => (showForm = false)} class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-1.5 rounded">Cancel</button>
+  <div class="card mb-4 animate-in">
+    <div class="card-header">
+      <div class="indicator" style="background:var(--yellow);"></div>
+      <h2>New Rule — Configuration</h2>
+    </div>
+    <div class="grid grid-cols-4 gap-4">
+      <div class="col-span-2">
+        <label style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);display:block;margin-bottom:4px;">Rule Name</label>
+        <input class="input" bind:value={form.name} placeholder="e.g. block-ssh-from-wan">
+      </div>
+      <div>
+        <label style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);display:block;margin-bottom:4px;">Action</label>
+        <select class="select" bind:value={form.action}>
+          <option value="deny">DENY</option>
+          <option value="allow">ALLOW</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);display:block;margin-bottom:4px;">Direction</label>
+        <select class="select" bind:value={form.direction}>
+          <option value="inbound">INBOUND</option>
+          <option value="outbound">OUTBOUND</option>
+          <option value="forward">FORWARD</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);display:block;margin-bottom:4px;">Source CIDR</label>
+        <input class="input" bind:value={form.src_cidr} placeholder="0.0.0.0/0">
+      </div>
+      <div>
+        <label style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);display:block;margin-bottom:4px;">Dest CIDR</label>
+        <input class="input" bind:value={form.dst_cidr} placeholder="10.0.0.0/8">
+      </div>
+      <div>
+        <label style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);display:block;margin-bottom:4px;">Protocol</label>
+        <input class="input" bind:value={form.protocol} placeholder="tcp/udp/icmp">
+      </div>
+      <div>
+        <label style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);display:block;margin-bottom:4px;">Port</label>
+        <input class="input" bind:value={form.dst_port} placeholder="e.g. 22 or 443">
+      </div>
+      <div class="col-span-4 flex gap-4" style="padding-top:12px;">
+        <button class="btn btn-primary" onclick={createRule}>DEPLOY RULE</button>
+        <button class="btn btn-ghost" onclick={() => showForm = false}>DISCARD</button>
+      </div>
     </div>
   </div>
 {/if}
 
-<div class="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden text-xs font-mono">
-  <table class="w-full">
+<div class="card animate-in">
+  <table class="data-table">
     <thead>
-      <tr class="bg-gray-800 text-gray-400 text-left">
-        <th class="px-4 py-2">Pri</th>
-        <th class="px-4 py-2">Name</th>
-        <th class="px-4 py-2">Action</th>
-        <th class="px-4 py-2">Source</th>
-        <th class="px-4 py-2">Dest</th>
-        <th class="px-4 py-2">Proto</th>
-        <th class="px-4 py-2">Dir</th>
-        <th class="px-4 py-2">Status</th>
-        <th class="px-4 py-2"></th>
+      <tr>
+        <th>#</th>
+        <th>Name</th>
+        <th>Action</th>
+        <th>Source</th>
+        <th>Dest</th>
+        <th>Proto</th>
+        <th>Dir</th>
+        <th>Status</th>
+        <th class="text-right">Ops</th>
       </tr>
     </thead>
     <tbody>
-      {#each rules as rule}
-        <tr class="border-t border-gray-800 hover:bg-gray-800/50">
-          <td class="px-4 py-1.5 text-gray-500">{rule.priority}</td>
-          <td class="px-4 py-1.5 text-gray-300">{rule.name}</td>
-          <td class="px-4 py-1.5"><span class={rule.action === 'deny' ? 'text-red-400' : 'text-green-400'}>{rule.action}</span></td>
-          <td class="px-4 py-1.5 text-gray-400">{rule.src_cidr || '*'}</td>
-          <td class="px-4 py-1.5 text-gray-400">{rule.dst_cidr || '*'}</td>
-          <td class="px-4 py-1.5 text-gray-400">{rule.protocol || 'any'}</td>
-          <td class="px-4 py-1.5 text-gray-500">{rule.direction}</td>
-          <td class="px-4 py-1.5"><span class={rule.enabled ? 'text-green-400' : 'text-red-400'}>{rule.enabled ? 'ON' : 'OFF'}</span></td>
-          <td class="px-4 py-1.5">
-            <button onclick={() => deleteRule(rule.id)} class="text-red-500 hover:text-red-300">del</button>
+      {#each rules as rule, i}
+        <tr>
+          <td style="color:var(--text-muted);">{rule.priority}</td>
+          <td style="color:var(--text-bright);">{rule.name}</td>
+          <td>
+            {#if rule.action === 'deny'}
+              <span class="badge deny">DENY</span>
+            {:else if rule.action.startsWith('rate-limit')}
+              <span class="badge warn">LIMIT</span>
+            {:else}
+              <span class="badge allow">ALLOW</span>
+            {/if}
+          </td>
+          <td style="color:var(--text-body);">{rule.src_cidr || '*'}</td>
+          <td style="color:var(--text-body);">{rule.dst_cidr || '*'}</td>
+          <td style="color:var(--text-muted);">{rule.protocol || 'any'}</td>
+          <td style="color:var(--text-muted);">{rule.direction}</td>
+          <td>
+            <span class="badge" class:on={rule.enabled} class:off={!rule.enabled}>
+              {rule.enabled ? 'ON' : 'OFF'}
+            </span>
+          </td>
+          <td class="text-right">
+            <button class="btn btn-danger" style="padding:2px 8px;font-size:10px;" onclick={() => deleteRule(rule.id)}>
+              DEL
+            </button>
+          </td>
+        </tr>
+      {:else}
+        <tr>
+          <td colspan="9" style="text-align:center;padding:32px;color:var(--text-muted);">
+            NO RULES DEFINED — Press '+ ADD RULE' to create your first firewall rule
           </td>
         </tr>
       {/each}

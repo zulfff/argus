@@ -14,64 +14,99 @@
         apiFetch('/rules'),
         apiFetch('/connections'),
       ]);
-      stats = s;
-      rules = r;
-      conns = c;
+      stats = s; rules = r; conns = c;
     } catch (e) {
-      console.error('Failed to fetch dashboard data:', e);
+      console.error('Dashboard fetch failed:', e);
     } finally {
       loading = false;
     }
-  });
 
-  const statCards = [
-    { label: 'Packets Allowed', value: stats.packets_allowed, color: 'text-green-400' },
-    { label: 'Packets Dropped', value: stats.packets_dropped, color: 'text-red-400' },
-    { label: 'Active Connections', value: stats.active_connections, color: 'text-cyan-400' },
-    { label: 'Blocked IPs', value: stats.blocked_ips, color: 'text-yellow-400' },
-    { label: 'Rate Limit Buckets', value: stats.rate_limit_buckets, color: 'text-purple-400' },
-  ];
+    const interval = setInterval(async () => {
+      try { stats = await apiFetch('/stats'); } catch {}
+      try { conns = await apiFetch('/connections'); } catch {}
+    }, 5000);
+    return () => clearInterval(interval);
+  });
 </script>
 
 {#if loading}
-  <p class="text-gray-500">Loading...</p>
+  <div style="display:flex;align-items:center;justify-content:center;height:60vh;color:var(--text-muted);">
+    <span style="animation:pulse 2s infinite;">▌&nbsp;INITIALIZING...</span>
+  </div>
 {:else}
-  <div class="grid grid-cols-5 gap-4 mb-6">
-    {#each statCards as card}
-      <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 text-center">
-        <p class="text-2xl font-mono {card.color}">{card.value.toLocaleString()}</p>
-        <p class="text-xs text-gray-500 mt-1">{card.label}</p>
-      </div>
-    {/each}
+  <div class="stat-grid animate-in">
+    <div class="stat-card green">
+      <div class="stat-value">{stats.packets_allowed.toLocaleString()}</div>
+      <div class="stat-label">Packets Allowed</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-value">{stats.packets_dropped.toLocaleString()}</div>
+      <div class="stat-label">Packets Dropped</div>
+    </div>
+    <div class="stat-card cyan">
+      <div class="stat-value">{stats.active_connections}</div>
+      <div class="stat-label">Active Connections</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="stat-value">{stats.blocked_ips}</div>
+      <div class="stat-label">Blocked IPs</div>
+    </div>
+    <div class="stat-card purple">
+      <div class="stat-value">{stats.rate_limit_buckets}</div>
+      <div class="stat-label">Rate Limit Buckets</div>
+    </div>
   </div>
 
-  <div class="grid grid-cols-2 gap-6">
-    <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-      <h2 class="text-sm font-bold text-gray-400 mb-2">Firewall Rules ({rules.length})</h2>
-      <div class="space-y-1 max-h-64 overflow-y-auto text-xs font-mono">
-        {#each rules.slice(0, 20) as rule}
-          <div class="flex justify-between py-1 border-b border-gray-800">
-            <span class={rule.action === 'deny' ? 'text-red-400' : 'text-green-400'}>
-              {rule.action}
-            </span>
-            <span class="text-gray-400">{rule.name}</span>
-            <span class="text-gray-600">{rule.direction}</span>
-          </div>
-        {/each}
+  <div class="grid grid-cols-2 gap-4 animate-in" style="animation-delay: 0.1s;">
+    <div class="card">
+      <div class="card-header">
+        <div class="indicator"></div>
+        <h2>Firewall Rules ({rules.length})</h2>
+      </div>
+      <div style="max-height: 300px; overflow-y: auto;">
+        {#if rules.length === 0}
+          <p style="color:var(--text-muted);font-size:12px;padding:16px 0;text-align:center;">NO RULES CONFIGURED</p>
+        {:else}
+          {#each rules.slice(0, 15) as rule}
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-dim);font-size:12px;" class="animate-in">
+              <span style="font-family:var(--font-mono);">
+                {#if rule.action === 'deny'}
+                  <span class="badge deny">DENY</span>
+                {:else if rule.action.startsWith('rate-limit')}
+                  <span class="badge warn">LIMIT</span>
+                {:else}
+                  <span class="badge allow">ALLOW</span>
+                {/if}
+              </span>
+              <span style="color:var(--text-body);flex:1;margin-left:12px;">{rule.name}</span>
+              <span style="color:var(--text-muted);font-size:11px;">{rule.direction}</span>
+              <span class="badge" class:on={rule.enabled} class:off={!rule.enabled}>
+                {rule.enabled ? 'ON' : 'OFF'}
+              </span>
+            </div>
+          {/each}
+        {/if}
       </div>
     </div>
 
-    <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-      <h2 class="text-sm font-bold text-gray-400 mb-2">Active Connections ({conns.length})</h2>
-      <div class="space-y-1 max-h-64 overflow-y-auto text-xs font-mono">
-        {#each conns.slice(0, 20) as conn}
-          <div class="flex justify-between py-1 border-b border-gray-800">
-            <span class="text-gray-300">{conn.src_ip}:{conn.src_port}</span>
-            <span class="text-gray-600">→</span>
-            <span class="text-gray-300">{conn.dst_ip}:{conn.dst_port}</span>
-            <span class="text-cyan-400">{conn.state}</span>
-          </div>
-        {/each}
+    <div class="card">
+      <div class="card-header">
+        <div class="indicator" style="background:var(--green);box-shadow:0 0 8px var(--green),0 0 16px rgba(63,185,80,0.3);"></div>
+        <h2>Active Connections ({conns.length})</h2>
+      </div>
+      <div style="max-height: 300px; overflow-y: auto;">
+        {#if conns.length === 0}
+          <p style="color:var(--text-muted);font-size:12px;padding:16px 0;text-align:center;">NO ACTIVE CONNECTIONS</p>
+        {:else}
+          {#each conns.slice(0, 15) as conn}
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-dim);font-size:11px;font-family:var(--font-mono);">
+              <span style="color:var(--text-body);">{conn.src_ip}:{conn.src_port}</span>
+              <span style="color:var(--text-muted);">→</span>
+              <span style="color:var(--text-body);">{conn.dst_ip}:{conn.dst_port}</span>
+              <span style="margin-left:auto;color:var(--cyan);">{conn.state.toUpperCase()}</span>
+            </div>
+          {/each}
+        {/if}
       </div>
     </div>
   </div>

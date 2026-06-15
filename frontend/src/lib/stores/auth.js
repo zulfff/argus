@@ -2,18 +2,14 @@ import { writable } from 'svelte/store';
 
 const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('argus_token') : null;
 export const authToken = writable(stored);
+export const authRole = writable(null);
 
 authToken.subscribe((val) => {
   if (typeof localStorage !== 'undefined') {
-    if (val) {
-      localStorage.setItem('argus_token', val);
-    } else {
-      localStorage.removeItem('argus_token');
-    }
+    if (val) localStorage.setItem('argus_token', val);
+    else localStorage.removeItem('argus_token');
   }
 });
-
-export const authRole = writable(null);
 
 const API_BASE = '/api/v1';
 
@@ -28,13 +24,17 @@ export async function apiFetch(path, options = {}) {
   };
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+
   if (res.status === 401) {
     authToken.set(null);
-    throw new Error('Unauthorized');
+    authRole.set(null);
+    throw new Error('Session expired — please login again');
   }
+
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || 'Request failed');
+    const err = await res.json().catch(() => ({ error: 'Request failed' }));
+    throw new Error(err.error || `HTTP ${res.status}`);
   }
+
   return res.json();
 }
