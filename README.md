@@ -148,7 +148,6 @@ docs/                     Architecture, threat model, API spec, runbooks
 | [Deployment](docs/deployment.md) | Bare-metal, Docker, nginx/Caddy TLS |
 | [Development](docs/development.md) | Dev setup, conventions, eBPF, troubleshooting |
 | [Runbooks](docs/runbooks/) | 10 operational procedures |
-| [Presentation](docs/presentation-narasi.md) | 21-slide narrative + rapid-fire Q&A |
 | [Security Policy](SECURITY.md) | Disclosure policy, supported versions, scope |
 
 ## License
