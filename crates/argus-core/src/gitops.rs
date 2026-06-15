@@ -161,7 +161,20 @@ impl GitOpsEngine {
         }
 
         for file in &change.files_changed {
-            let path = self.repo_path.join(file);
+            let raw_path = self.repo_path.join(file);
+
+            let path = raw_path
+                .canonicalize()
+                .map_err(|e| ArgusError::Validation(
+                    format!("invalid config file path '{}': {}", file, e)
+                ))?;
+
+            if !path.starts_with(&self.repo_path) {
+                return Err(ArgusError::Validation(
+                    format!("path traversal detected: '{}' is outside repo directory", file)
+                ));
+            }
+
             if !path.exists() {
                 continue;
             }

@@ -103,10 +103,63 @@ fn default_enabled() -> bool {
     true
 }
 
+fn validate_create_request(req: &CreateRuleRequest) -> Result<(), String> {
+    if req.name.is_empty() || req.name.len() > 256 {
+        return Err("Rule name must be 1–256 characters".into());
+    }
+    if let Some(ref desc) = req.description {
+        if desc.len() > 1024 {
+            return Err("Description must be ≤ 1024 characters".into());
+        }
+    }
+    if let Some(ref cidr) = req.src_cidr {
+        validate_cidr(cidr)?;
+    }
+    if let Some(ref cidr) = req.dst_cidr {
+        validate_cidr(cidr)?;
+    }
+    if let Some(ref proto) = req.protocol {
+        if !matches!(
+            proto.to_lowercase().as_str(),
+            "tcp" | "udp" | "icmp" | "icmpv6" | "any"
+        ) {
+            if proto.parse::<u8>().is_err() {
+                return Err(format!("Invalid protocol: {}", proto));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_cidr(cidr: &str) -> Result<(), String> {
+    let parts: Vec<&str> = cidr.split('/').collect();
+    if parts.len() != 2 {
+        return Err(format!("Invalid CIDR format: {}", cidr));
+    }
+    let _ip: std::net::IpAddr = parts[0]
+        .parse()
+        .map_err(|_| format!("Invalid IP in CIDR: {}", cidr))?;
+    let prefix: u32 = parts[1]
+        .parse()
+        .map_err(|_| format!("Invalid prefix in CIDR: {}", cidr))?;
+    match _ip {
+        std::net::IpAddr::V4(_) if prefix > 32 => {
+            return Err(format!("IPv4 prefix must be ≤ 32, got {}", prefix));
+        }
+        std::net::IpAddr::V6(_) if prefix > 128 => {
+            return Err(format!("IPv6 prefix must be ≤ 128, got {}", prefix));
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 pub async fn create_rule(
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateRuleRequest>,
 ) -> Result<Json<RuleResponse>, Json<serde_json::Value>> {
+    validate_create_request(&req).map_err(|e| Json(serde_json::json!({"error": e})))?;
+
     let action = parse_action(&req.action).map_err(|e| Json(serde_json::json!({"error": e})))?;
     let direction = parse_direction(&req.direction).map_err(|e| Json(serde_json::json!({"error": e})))?;
 

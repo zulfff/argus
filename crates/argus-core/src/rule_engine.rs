@@ -116,22 +116,28 @@ fn ip_in_cidr(ip: IpAddr, cidr: &str) -> bool {
     };
     match (ip, net_ip) {
         (IpAddr::V4(ip), IpAddr::V4(net)) => {
+            if prefix_len > 32 {
+                return false;
+            }
             let ip_bits = u32::from(ip);
             let net_bits = u32::from(net);
             let mask = if prefix_len == 0 {
                 0
             } else {
-                !0u32 << (32 - prefix_len)
+                u32::MAX.wrapping_shl(32u32.saturating_sub(prefix_len))
             };
             (ip_bits & mask) == (net_bits & mask)
         }
         (IpAddr::V6(ip), IpAddr::V6(net)) => {
+            if prefix_len > 128 {
+                return false;
+            }
             let ip_bits = u128::from(ip);
             let net_bits = u128::from(net);
             let mask = if prefix_len == 0 {
                 0
             } else {
-                !0u128 << (128 - prefix_len)
+                u128::MAX.wrapping_shl(128u32.saturating_sub(prefix_len))
             };
             (ip_bits & mask) == (net_bits & mask)
         }

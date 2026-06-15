@@ -83,6 +83,11 @@ impl ThreatIntelligence {
 
     #[instrument(skip(self))]
     pub async fn refresh_abuseipdb(&self, api_key: &str, confidence_min: u8) -> Result<usize> {
+        if confidence_min > 100 {
+            return Err(ArgusError::Validation(
+                "AbuseIPDB confidence_min must be 0–100".into(),
+            ));
+        }
         let url = format!(
             "https://api.abuseipdb.com/api/v2/blacklist?confidenceMinimum={}",
             confidence_min

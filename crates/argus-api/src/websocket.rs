@@ -1,17 +1,20 @@
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
+        Query, State,
     },
+    http::StatusCode,
     response::IntoResponse,
 };
 use futures::SinkExt;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{debug, warn};
 
 use crate::AppState;
+use crate::auth::JwtAuth;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LiveEvent {
@@ -59,49 +62,50 @@ impl LiveEventBus {
         self.publish(event);
     }
 
-    pub fn publish_connection(
-        &self,
-        src_ip: &str,
-        dst_ip: &str,
-        state: &str,
-    ) {
+    pub fn publish_connection(&self, src_ip: &str, dst_ip: &str, state: &str) {
         let event = LiveEvent {
             event_type: "connection".into(),
             timestamp: chrono::Utc::now().to_rfc3339(),
             data: serde_json::json!({
-                "src_ip": src_ip,
-                "dst_ip": dst_ip,
-                "state": state,
+                "src_ip": src_ip, "dst_ip": dst_ip, "state": state,
             }),
         };
         self.publish(event);
     }
 
-    pub fn publish_alert(
-        &self,
-        alert_type: &str,
-        message: &str,
-        severity: &str,
-    ) {
+    pub fn publish_alert(&self, alert_type: &str, message: &str, severity: &str) {
         let event = LiveEvent {
             event_type: "alert".into(),
             timestamp: chrono::Utc::now().to_rfc3339(),
             data: serde_json::json!({
-                "type": alert_type,
-                "message": message,
-                "severity": severity,
+                "type": alert_type, "message": message, "severity": severity,
             }),
         };
         self.publish(event);
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WsQuery {
+    token: Option<String>,
+}
+
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+    Query(query): Query<WsQuery>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let token = query.token.ok_or_else(|| {
+        (StatusCode::UNAUTHORIZED, "Missing token query parameter".into())
+    })?;
+
+    let jwt = JwtAuth::new(&state.auth_config.jwt_secret);
+    let _claims = jwt.validate_token(&token).map_err(|e| {
+        (StatusCode::UNAUTHORIZED, format!("Invalid token: {}", e))
+    })?;
+
     let event_bus = state.event_bus.subscribe();
-    ws.on_upgrade(move |socket| handle_ws(socket, event_bus))
+    Ok(ws.on_upgrade(move |socket| handle_ws(socket, event_bus)))
 }
 
 async fn handle_ws(

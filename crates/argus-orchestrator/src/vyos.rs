@@ -79,7 +79,7 @@ impl VyosClient {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(HTTP_TIMEOUT_SECS))
             .connect_timeout(Duration::from_secs(10))
-            .danger_accept_invalid_certs(true)
+            .tls_built_in_root_certs(true)
             .user_agent("argus-orchestrator/0.1.0")
             .build()
             .expect("failed to build reqwest client");

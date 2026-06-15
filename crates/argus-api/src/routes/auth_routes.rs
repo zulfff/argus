@@ -1,11 +1,14 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use std::net::SocketAddr;
 use std::sync::Arc;
+use tracing::warn;
 
 use crate::AppState;
 use crate::auth::{JwtAuth, LoginRequest, RefreshRequest, TokenResponse};
 
 pub async fn login(
     State(state): State<Arc<AppState>>,
+    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<TokenResponse>, (StatusCode, Json<serde_json::Value>)> {
     let user = state
@@ -14,10 +17,23 @@ pub async fn login(
         .verify_password(&req.username, &req.password)
         .await
         .ok_or_else(|| {
+            warn!(
+                username = %req.username,
+                ip = %addr.ip(),
+                "Failed login attempt"
+            );
+            state.audit_log.log(
+                &req.username,
+                "login.failed",
+                "auth",
+                &format!("Failed login from {}", addr.ip()),
+                Some(&addr.ip().to_string()),
+                false,
+            );
             (
                 StatusCode::UNAUTHORIZED,
                 Json(serde_json::json!({
-                    "error": "invalid username or password",
+                    "error": "Invalid username or password",
                     "code": 401
                 })),
             )
@@ -28,11 +44,20 @@ pub async fn login(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({
-                "error": e,
+                "error": "Authentication failed",
                 "code": 500
             })),
         )
     })?;
+
+    state.audit_log.log(
+        &user.username,
+        "login.success",
+        "auth",
+        "Successful login",
+        Some(&addr.ip().to_string()),
+        true,
+    );
 
     Ok(Json(tokens))
 }
@@ -46,7 +71,7 @@ pub async fn refresh(
         (
             StatusCode::UNAUTHORIZED,
             Json(serde_json::json!({
-                "error": format!("refresh failed: {}", e),
+                "error": "Token refresh failed",
                 "code": 401
             })),
         )

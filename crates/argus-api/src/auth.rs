@@ -28,6 +28,9 @@ pub struct Claims {
     pub role: Role,
     pub exp: usize,
     pub iat: usize,
+    pub nbf: usize,
+    pub iss: String,
+    pub aud: String,
     pub jti: String,
 }
 
@@ -196,6 +199,9 @@ impl JwtAuth {
             role: user.role.clone(),
             exp: now + ACCESS_TOKEN_EXPIRY_SECS,
             iat: now,
+            nbf: now,
+            iss: "argus".into(),
+            aud: "argus-api".into(),
             jti: Uuid::new_v4().to_string(),
         };
 
@@ -208,6 +214,9 @@ impl JwtAuth {
             role: user.role.clone(),
             exp: now + REFRESH_TOKEN_EXPIRY_SECS,
             iat: now,
+            nbf: now,
+            iss: "argus".into(),
+            aud: "argus-api".into(),
             jti: Uuid::new_v4().to_string(),
         };
 
@@ -226,7 +235,14 @@ impl JwtAuth {
     pub fn validate_token(&self, token: &str) -> Result<Claims, String> {
         let mut validation = Validation::default();
         validation.validate_exp = true;
-        validation.leeway = 30;
+        validation.validate_nbf = true;
+        validation.set_issuer(&["argus"]);
+        validation.set_audience(&["argus-api"]);
+        validation.leeway = 5;
+        validation.required_spec_claims = ["exp", "iat", "nbf", "iss", "aud"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
 
         let token_data = decode::<Claims>(token, &self.decoding_key, &validation)
             .map_err(|e| format!("token validation error: {}", e))?;
@@ -248,6 +264,9 @@ impl JwtAuth {
             role: claims.role.clone(),
             exp: now + ACCESS_TOKEN_EXPIRY_SECS,
             iat: now,
+            nbf: now,
+            iss: "argus".into(),
+            aud: "argus-api".into(),
             jti: Uuid::new_v4().to_string(),
         };
 
@@ -266,6 +285,14 @@ impl JwtAuth {
 
 pub struct AuthenticatedUser {
     pub claims: Claims,
+}
+
+impl Clone for AuthenticatedUser {
+    fn clone(&self) -> Self {
+        Self {
+            claims: self.claims.clone(),
+        }
+    }
 }
 
 impl AuthenticatedUser {

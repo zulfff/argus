@@ -27,3 +27,5 @@ argon2 = "0.5"
 axum-extra = { version = "0.9", features = ["typed-header"] }
 hyper = { version = "1", features = ["server"] }
 tower-http = { version = "0.6", features = ["cors", "auth"] }
+rand = "0.8"
+hex = "0.4"

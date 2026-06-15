@@ -74,6 +74,14 @@ impl MultiWanManager {
         let name = link.name.clone();
         let is_primary = link.is_primary;
 
+        for endpoint in &link.health_endpoints {
+            if !endpoint.starts_with("https://") {
+                return Err(ArgusError::Validation(
+                    format!("health endpoint '{}' must use HTTPS", endpoint)
+                ));
+            }
+        }
+
         let mut links = self.links.lock().map_err(|e| {
             ArgusError::Internal(format!("lock error: {}", e))
         })?;
