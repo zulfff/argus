@@ -178,8 +178,7 @@ impl AuditLog {
                     .iter()
                     .rev()
                     .filter(|e| {
-                        actor.is_none_or(|a| e.actor == a)
-                            && action.is_none_or(|a| e.action == a)
+                        actor.is_none_or(|a| e.actor == a) && action.is_none_or(|a| e.action == a)
                     })
                     .take(limit)
                     .cloned()

@@ -195,9 +195,9 @@ impl ThreatIntelligence {
 
     pub async fn auto_refresh_all(&self, abuseipdb_key: Option<String>, confidence_min: u8) {
         let should_refresh = match self.last_refresh.lock() {
-            Ok(last) => last.is_none_or(|t| {
-                (Utc::now() - t).num_seconds() as u64 >= REFRESH_INTERVAL_SECS
-            }),
+            Ok(last) => {
+                last.is_none_or(|t| (Utc::now() - t).num_seconds() as u64 >= REFRESH_INTERVAL_SECS)
+            }
             Err(_) => true,
         };
 
