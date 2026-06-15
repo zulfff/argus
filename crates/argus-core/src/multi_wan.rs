@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::net::{IpAddr, SocketAddr};
+use std::net::IpAddr;
 use std::sync::Mutex;
 use std::time::Duration;
 use tracing::{info, instrument, warn};
@@ -11,7 +11,9 @@ use argus_common::error::{ArgusError, Result};
 
 const HEALTH_CHECK_INTERVAL_SECS: u64 = 5;
 const HEALTH_CHECK_TIMEOUT_SECS: u64 = 3;
+#[allow(dead_code)]
 const FAILOVER_THRESHOLD: u32 = 3;
+#[allow(dead_code)]
 const FAILBACK_COOLDOWN_SECS: i64 = 60;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

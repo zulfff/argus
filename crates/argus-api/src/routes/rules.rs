@@ -125,11 +125,10 @@ fn validate_create_request(req: &CreateRuleRequest) -> Result<(), String> {
         if !matches!(
             proto.to_lowercase().as_str(),
             "tcp" | "udp" | "icmp" | "icmpv6" | "any"
-        ) {
-            if proto.parse::<u8>().is_err() {
+        )
+            && proto.parse::<u8>().is_err() {
                 return Err(format!("Invalid protocol: {}", proto));
             }
-        }
     }
     Ok(())
 }

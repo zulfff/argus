@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command as StdCommand;
 use tracing::instrument;
 
@@ -207,7 +207,7 @@ impl GitOpsEngine {
     pub fn get_config_tree(&self) -> Result<serde_json::Value> {
         let mut tree = serde_json::Map::new();
 
-        for entry in std::fs::read_dir(&self.repo_path.join(&self.config.config_dir))
+        for entry in std::fs::read_dir(self.repo_path.join(&self.config.config_dir))
             .map_err(ArgusError::Io)?
         {
             let entry = entry.map_err(ArgusError::Io)?;

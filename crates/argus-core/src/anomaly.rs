@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use std::collections::{HashMap, VecDeque};
-use std::net::IpAddr;
 use std::sync::Mutex;
 use tracing::instrument;
 
@@ -88,7 +87,7 @@ impl AnomalyDetector {
         entry.push_back(sample);
 
         let cutoff = Utc::now() - chrono::Duration::minutes(BASELINE_WINDOW_MINUTES);
-        while entry.front().map_or(false, |s| s.timestamp < cutoff) {
+        while entry.front().is_some_and(|s| s.timestamp < cutoff) {
             entry.pop_front();
         }
     }
@@ -249,7 +248,7 @@ impl AnomalyDetector {
         let cutoff = Utc::now() - chrono::Duration::minutes(BASELINE_WINDOW_MINUTES * 2);
         if let Ok(mut samples) = self.samples.lock() {
             for entry in samples.values_mut() {
-                while entry.front().map_or(false, |s| s.timestamp < cutoff) {
+                while entry.front().is_some_and(|s| s.timestamp < cutoff) {
                     entry.pop_front();
                 }
             }

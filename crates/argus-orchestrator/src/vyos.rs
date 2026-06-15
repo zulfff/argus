@@ -45,6 +45,7 @@ struct VyosApiRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 struct VyosApiResponse<T> {
     success: bool,
     data: Option<T>,

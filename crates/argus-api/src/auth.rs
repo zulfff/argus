@@ -296,6 +296,7 @@ impl Clone for AuthenticatedUser {
 }
 
 impl AuthenticatedUser {
+    #[allow(dead_code)]
     pub async fn from_request(parts: &mut Parts, jwt_auth: &JwtAuth) -> Result<Self, AuthError> {
         let TypedHeader(Authorization(bearer)) = parts
             .extract::<TypedHeader<Authorization<Bearer>>>()
@@ -304,13 +305,14 @@ impl AuthenticatedUser {
 
         let claims = jwt_auth
             .validate_token(bearer.token())
-            .map_err(|e| AuthError::InvalidToken(e))?;
+            .map_err(AuthError::InvalidToken)?;
 
         Ok(AuthenticatedUser { claims })
     }
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum AuthError {
     MissingToken,
     InvalidToken(String),
@@ -322,7 +324,7 @@ impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
             AuthError::MissingToken => (StatusCode::UNAUTHORIZED, "Missing authorization token"),
-            AuthError::InvalidToken(e) => (StatusCode::UNAUTHORIZED, "Invalid token"),
+            AuthError::InvalidToken(_e) => (StatusCode::UNAUTHORIZED, "Invalid token"),
             AuthError::Forbidden => (StatusCode::FORBIDDEN, "Insufficient permissions"),
             AuthError::InternalError => (StatusCode::INTERNAL_SERVER_ERROR, "Internal auth error"),
         };

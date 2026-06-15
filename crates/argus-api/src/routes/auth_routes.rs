@@ -1,4 +1,4 @@
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use axum::{extract::State, http::StatusCode, Json};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing::warn;
@@ -40,7 +40,7 @@ pub async fn login(
         })?;
 
     let jwt = JwtAuth::new(&state.auth_config.jwt_secret);
-    let tokens = jwt.generate_tokens(&user).map_err(|e| {
+    let tokens = jwt.generate_tokens(&user).map_err(|_e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({
@@ -67,7 +67,7 @@ pub async fn refresh(
     Json(req): Json<RefreshRequest>,
 ) -> Result<Json<TokenResponse>, (StatusCode, Json<serde_json::Value>)> {
     let jwt = JwtAuth::new(&state.auth_config.jwt_secret);
-    let tokens = jwt.refresh_access_token(&req.refresh_token).map_err(|e| {
+    let tokens = jwt.refresh_access_token(&req.refresh_token).map_err(|_e| {
         (
             StatusCode::UNAUTHORIZED,
             Json(serde_json::json!({

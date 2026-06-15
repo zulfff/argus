@@ -168,7 +168,7 @@ impl ThreatIntelligence {
     pub fn is_blocked(&self, ip: IpAddr) -> bool {
         let now = Utc::now();
         match self.entries.lock() {
-            Ok(entries) => entries.get(&ip).map_or(false, |e| e.expires_at > now),
+            Ok(entries) => entries.get(&ip).is_some_and(|e| e.expires_at > now),
             Err(_) => false,
         }
     }
@@ -195,7 +195,7 @@ impl ThreatIntelligence {
 
     pub async fn auto_refresh_all(&self, abuseipdb_key: Option<String>, confidence_min: u8) {
         let should_refresh = match self.last_refresh.lock() {
-            Ok(last) => last.map_or(true, |t| {
+            Ok(last) => last.is_none_or(|t| {
                 (Utc::now() - t).num_seconds() as u64 >= REFRESH_INTERVAL_SECS
             }),
             Err(_) => true,

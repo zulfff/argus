@@ -173,7 +173,7 @@ async fn extract_auth(
     let jwt = JwtAuth::new(&state.auth_config.jwt_secret);
     let claims = jwt
         .validate_token(bearer.token())
-        .map_err(|e| crate::auth::AuthError::InvalidToken(e))?;
+        .map_err(crate::auth::AuthError::InvalidToken)?;
 
     Ok(crate::auth::AuthenticatedUser { claims })
 }
@@ -234,7 +234,7 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let mut auth_config = AuthConfig::new(jwt_secret);
+    let auth_config = AuthConfig::new(jwt_secret);
 
     let admin_user = std::env::var("ARGUS_ADMIN_USER").unwrap_or_else(|_| "admin".into());
     let admin_pass = std::env::var("ARGUS_ADMIN_PASS").unwrap_or_else(|_| {

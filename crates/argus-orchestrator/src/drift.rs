@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{info, instrument, warn};
 
-use argus_common::error::{ArgusError, Result};
+use argus_common::error::Result;
 
 use crate::netbox::{NetboxClient, WebhookAction};
 use crate::vyos::VyosClient;
@@ -132,7 +132,7 @@ impl DriftDetector {
 
         let netbox_prefixes = self.netbox.get_prefixes(None).await.unwrap_or_default();
 
-        let vyos_config = vyos.get_running_config().await.unwrap_or_default();
+        let _vyos_config = vyos.get_running_config().await.unwrap_or_default();
         let vyos_rules = vyos.get_firewall_rules().await.unwrap_or_default();
 
         let mut expected_rules = Vec::new();
@@ -283,7 +283,7 @@ impl ReconciliationEngine {
                         reason: reason.clone(),
                     });
                 }
-                WebhookAction::ReconcileConfig { reason } => {
+                WebhookAction::ReconcileConfig { reason: _ } => {
                     let reports = self.detector.check_all_devices().await.unwrap_or_default();
                     for report in &reports {
                         let action = self.detector.determine_remediation(report).await;

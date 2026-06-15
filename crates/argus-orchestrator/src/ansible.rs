@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::process::Command;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, instrument};
 
 use argus_common::error::{ArgusError, Result};
 

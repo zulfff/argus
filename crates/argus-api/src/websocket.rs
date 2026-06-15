@@ -6,9 +6,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use futures::SinkExt;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{debug, warn};
@@ -118,7 +116,7 @@ async fn handle_ws(mut socket: WebSocket, mut rx: broadcast::Receiver<LiveEvent>
                 match event {
                     Ok(ev) => {
                         if let Ok(json) = serde_json::to_string(&ev) {
-                            if socket.send(Message::Text(json.into())).await.is_err() {
+                            if socket.send(Message::Text(json)).await.is_err() {
                                 debug!("WebSocket client disconnected");
                                 break;
                             }

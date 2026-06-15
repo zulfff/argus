@@ -178,8 +178,8 @@ impl AuditLog {
                     .iter()
                     .rev()
                     .filter(|e| {
-                        actor.map_or(true, |a| e.actor == a)
-                            && action.map_or(true, |a| e.action == a)
+                        actor.is_none_or(|a| e.actor == a)
+                            && action.is_none_or(|a| e.action == a)
                     })
                     .take(limit)
                     .cloned()
