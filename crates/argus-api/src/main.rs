@@ -45,66 +45,18 @@ pub struct AppState {
     pub audit_log: AuditLog,
 }
 
-fn protected_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
+fn protected_routes() -> Router<Arc<AppState>> {
     Router::new()
-        .route(
-            "/api/v1/rules",
-            axum::routing::get(routes::rules::list_rules),
-        )
-        .route(
-            "/api/v1/rules",
-            axum::routing::post(routes::rules::create_rule),
-        )
-        .route(
-            "/api/v1/rules/{id}",
-            axum::routing::get(routes::rules::get_rule),
-        )
-        .route(
-            "/api/v1/rules/{id}",
-            axum::routing::put(routes::rules::update_rule),
-        )
-        .route(
-            "/api/v1/rules/{id}",
-            axum::routing::delete(routes::rules::delete_rule),
-        )
-        .route(
-            "/api/v1/stats",
-            axum::routing::get(routes::stats::get_stats),
-        )
-        .route(
-            "/api/v1/connections",
-            axum::routing::get(routes::connections::list_connections),
-        )
-        .route(
-            "/api/v1/block",
-            axum::routing::post(routes::block::block_ip),
-        )
-        .route(
-            "/api/v1/block/{ip}",
-            axum::routing::delete(routes::block::unblock_ip),
-        )
-        .route("/api/v1/ws", axum::routing::get(websocket::ws_handler))
-        .route_layer(middleware::from_fn_with_state(
-            state.clone(),
-            auth_middleware,
-        ))
-}
-
-fn public_routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/health", axum::routing::get(|| async { "OK" }))
-        .route(
-            "/api/v1/auth/login",
-            axum::routing::post(routes::auth_routes::login),
-        )
-        .route(
-            "/api/v1/auth/refresh",
-            axum::routing::post(routes::auth_routes::refresh),
-        )
-        .route(
-            "/metrics",
-            axum::routing::get(routes::metrics::metrics_handler),
-        )
+        .route("/rules", axum::routing::get(routes::rules::list_rules))
+        .route("/rules", axum::routing::post(routes::rules::create_rule))
+        .route("/rules/{id}", axum::routing::get(routes::rules::get_rule))
+        .route("/rules/{id}", axum::routing::put(routes::rules::update_rule))
+        .route("/rules/{id}", axum::routing::delete(routes::rules::delete_rule))
+        .route("/stats", axum::routing::get(routes::stats::get_stats))
+        .route("/connections", axum::routing::get(routes::connections::list_connections))
+        .route("/block", axum::routing::post(routes::block::block_ip))
+        .route("/block/{ip}", axum::routing::delete(routes::block::unblock_ip))
+        .route("/ws", axum::routing::get(websocket::ws_handler))
 }
 
 pub fn app(state: Arc<AppState>) -> Router {
@@ -116,24 +68,16 @@ pub fn app(state: Arc<AppState>) -> Router {
             .expect("failed to build rate limiter config"),
     );
 
-    let login_limiter = Arc::new(
-        GovernorConfigBuilder::default()
-            .per_second(5)
-            .burst_size(10)
-            .finish()
-            .expect("failed to build login rate limiter"),
-    );
+    let protected = protected_routes()
+        .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
-    let login_layer = GovernorLayer {
-        config: login_limiter,
-    };
-
-    public_routes()
-        .route_layer(login_layer)
-        .merge(protected_routes(state.clone()))
-        .layer(GovernorLayer {
-            config: governor_config,
-        })
+    Router::new()
+        .route("/health", axum::routing::get(|| async { "OK" }))
+        .route("/api/v1/auth/login", axum::routing::post(routes::auth_routes::login))
+        .route("/api/v1/auth/refresh", axum::routing::post(routes::auth_routes::refresh))
+        .route("/metrics", axum::routing::get(routes::metrics::metrics_handler))
+        .nest("/api/v1", protected)
+        .layer(GovernorLayer { config: governor_config })
         .with_state(state)
 }
 
