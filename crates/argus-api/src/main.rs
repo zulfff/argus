@@ -5,19 +5,7 @@ mod websocket;
 
 use std::sync::Arc;
 
-use axum::RequestPartsExt;
-use axum::{
-    body::Body,
-    extract::State,
-    http::{Request, StatusCode},
-    middleware::{self, Next},
-    response::{IntoResponse, Response},
-    Json, Router,
-};
-use axum_extra::{
-    headers::{authorization::Bearer, Authorization},
-    TypedHeader,
-};
+use axum::Router;
 use rand::RngCore;
 use tokio::net::TcpListener;
 use tokio::signal;
@@ -31,7 +19,7 @@ use argus_core::rule_engine::RuleEngine;
 use argus_core::scanner::ScanDetector;
 use argus_observability::metrics::ArgusMetrics;
 
-use crate::auth::{AuthConfig, JwtAuth, Role};
+use crate::auth::{AuthConfig, Role};
 use crate::websocket::LiveEventBus;
 
 pub struct AppState {
@@ -45,32 +33,6 @@ pub struct AppState {
     pub audit_log: AuditLog,
 }
 
-fn protected_routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/rules", axum::routing::get(routes::rules::list_rules))
-        .route("/rules", axum::routing::post(routes::rules::create_rule))
-        .route("/rules/{id}", axum::routing::get(routes::rules::get_rule))
-        .route(
-            "/rules/{id}",
-            axum::routing::put(routes::rules::update_rule),
-        )
-        .route(
-            "/rules/{id}",
-            axum::routing::delete(routes::rules::delete_rule),
-        )
-        .route("/stats", axum::routing::get(routes::stats::get_stats))
-        .route(
-            "/connections",
-            axum::routing::get(routes::connections::list_connections),
-        )
-        .route("/block", axum::routing::post(routes::block::block_ip))
-        .route(
-            "/block/{ip}",
-            axum::routing::delete(routes::block::unblock_ip),
-        )
-        .route("/ws", axum::routing::get(websocket::ws_handler))
-}
-
 pub fn app(state: Arc<AppState>) -> Router {
     let governor_config = Arc::new(
         GovernorConfigBuilder::default()
@@ -79,11 +41,6 @@ pub fn app(state: Arc<AppState>) -> Router {
             .finish()
             .expect("failed to build rate limiter config"),
     );
-
-    let protected = protected_routes().route_layer(middleware::from_fn_with_state(
-        state.clone(),
-        auth_middleware,
-    ));
 
     Router::new()
         .route("/health", axum::routing::get(|| async { "OK" }))
@@ -99,71 +56,47 @@ pub fn app(state: Arc<AppState>) -> Router {
             "/metrics",
             axum::routing::get(routes::metrics::metrics_handler),
         )
-        .nest("/api/v1", protected)
+        .route(
+            "/api/v1/rules",
+            axum::routing::get(routes::rules::list_rules),
+        )
+        .route(
+            "/api/v1/rules",
+            axum::routing::post(routes::rules::create_rule),
+        )
+        .route(
+            "/api/v1/rules/{id}",
+            axum::routing::get(routes::rules::get_rule),
+        )
+        .route(
+            "/api/v1/rules/{id}",
+            axum::routing::put(routes::rules::update_rule),
+        )
+        .route(
+            "/api/v1/rules/{id}",
+            axum::routing::delete(routes::rules::delete_rule),
+        )
+        .route(
+            "/api/v1/stats",
+            axum::routing::get(routes::stats::get_stats),
+        )
+        .route(
+            "/api/v1/connections",
+            axum::routing::get(routes::connections::list_connections),
+        )
+        .route(
+            "/api/v1/block",
+            axum::routing::post(routes::block::block_ip),
+        )
+        .route(
+            "/api/v1/block/{ip}",
+            axum::routing::delete(routes::block::unblock_ip),
+        )
+        .route("/api/v1/ws", axum::routing::get(websocket::ws_handler))
         .layer(GovernorLayer {
             config: governor_config,
         })
         .with_state(state)
-}
-
-async fn auth_middleware(
-    State(state): State<Arc<AppState>>,
-    mut req: Request<Body>,
-    next: Next,
-) -> Response {
-    let (mut parts, body) = req.into_parts();
-
-    let result = extract_auth(&mut parts, &state).await;
-
-    req = Request::from_parts(parts, body);
-
-    match result {
-        Ok(user) => {
-            req.extensions_mut().insert(user);
-            next.run(req).await
-        }
-        Err(err) => {
-            let (status, msg) = auth_error_response(&err);
-            let body = serde_json::json!({"error": msg, "code": status.as_u16()});
-            (status, Json(body)).into_response()
-        }
-    }
-}
-
-async fn extract_auth(
-    parts: &mut axum::http::request::Parts,
-    state: &AppState,
-) -> Result<crate::auth::AuthenticatedUser, crate::auth::AuthError> {
-    let TypedHeader(Authorization(bearer)) = parts
-        .extract::<TypedHeader<Authorization<Bearer>>>()
-        .await
-        .map_err(|_| crate::auth::AuthError::MissingToken)?;
-
-    let jwt = JwtAuth::new(&state.auth_config.jwt_secret);
-    let claims = jwt
-        .validate_token(bearer.token())
-        .map_err(crate::auth::AuthError::InvalidToken)?;
-
-    Ok(crate::auth::AuthenticatedUser { claims })
-}
-
-fn auth_error_response(err: &crate::auth::AuthError) -> (StatusCode, String) {
-    match err {
-        crate::auth::AuthError::MissingToken => (
-            StatusCode::UNAUTHORIZED,
-            "Missing authorization token".into(),
-        ),
-        crate::auth::AuthError::InvalidToken(_) => {
-            (StatusCode::UNAUTHORIZED, "Invalid or expired token".into())
-        }
-        crate::auth::AuthError::Forbidden => {
-            (StatusCode::FORBIDDEN, "Insufficient permissions".into())
-        }
-        crate::auth::AuthError::InternalError => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Authentication error".into(),
-        ),
-    }
 }
 
 fn generate_secret() -> Vec<u8> {
@@ -175,7 +108,6 @@ fn generate_secret() -> Vec<u8> {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt().with_target(false).init();
-
     info!("ARGUS v0.1.1 starting...");
 
     if let Err(e) = try_main().await {
@@ -211,7 +143,7 @@ async fn try_main() -> anyhow::Result<()> {
             anyhow::bail!("ARGUS_JWT_SECRET too short: {} bytes, need >= 32", s.len());
         }
         Err(_) => {
-            warn!("ARGUS_JWT_SECRET not set — generating random secret for this session. Users will need to re-login on restart.");
+            warn!("ARGUS_JWT_SECRET not set — generating random secret for this session.");
             generate_secret()
         }
     };
@@ -226,7 +158,7 @@ async fn try_main() -> anyhow::Result<()> {
             rand::thread_rng().fill_bytes(&mut buf);
             buf
         });
-        info!("Generated admin password (change immediately): {}", pass);
+        info!("Generated admin password: {}", pass);
         pass
     });
 
@@ -257,13 +189,14 @@ async fn try_main() -> anyhow::Result<()> {
 
     let listener = TcpListener::bind("0.0.0.0:8443").await?;
     info!("Ready. Listening on http://0.0.0.0:8443");
-    eprintln!("\n  ========================================");
+    eprintln!();
+    eprintln!("  ========================================");
     eprintln!("  ARGUS API — http://127.0.0.1:8443");
     eprintln!("  Health:     http://127.0.0.1:8443/health");
-    eprintln!("  Metrics:    http://127.0.0.1:8443/metrics");
     eprintln!("  Admin user: {}", admin_user);
     eprintln!("  Admin pass: {}", admin_pass);
-    eprintln!("  ========================================\n");
+    eprintln!("  ========================================");
+    eprintln!();
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
@@ -277,10 +210,7 @@ async fn shutdown_signal() {
         match signal::ctrl_c().await {
             Ok(()) => info!("Ctrl+C received"),
             Err(e) => {
-                warn!(
-                    "Cannot install Ctrl+C handler (container?): {}. Using SIGTERM only.",
-                    e
-                );
+                warn!("Cannot install Ctrl+C handler (container?): {e}. Using SIGTERM only.");
                 std::future::pending::<()>().await;
             }
         }
@@ -294,10 +224,7 @@ async fn shutdown_signal() {
                 info!("SIGTERM received");
             }
             Err(e) => {
-                warn!(
-                    "Cannot install SIGTERM handler (container?): {}. Use Ctrl+C.",
-                    e
-                );
+                warn!("Cannot install SIGTERM handler (container?): {e}. Use Ctrl+C.");
                 std::future::pending::<()>().await;
             }
         }
