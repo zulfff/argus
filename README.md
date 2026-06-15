@@ -64,6 +64,17 @@ curl -X POST http://127.0.0.1:8443/api/v1/auth/login \
 | JWT Secret | **required** | Set `ARGUS_JWT_SECRET` ≥ 32 bytes |
 | Log Level | `argus=info` | Set `RUST_LOG` |
 
+**GitHub Codespaces:** after running the server, open the Ports tab (bottom panel) and ensure port 8443 is forwarded. Then use `curl http://localhost:8443/health`.
+
+**Common issues:**
+| Symptom | Likely cause |
+|---------|-------------|
+| `curl: (7) Connection refused` | Server didn't start — check terminal output for error |
+| `HTTP 502 Bad Gateway` | Using HTTPS (`https://`) — use HTTP (`http://`) |
+| Server exits immediately | `ARGUS_JWT_SECRET` not set or < 32 characters |
+| `Build fails` | Missing `libpq-dev` — `sudo apt install libpq-dev` |
+| `cargo: command not found` | Rust not installed — `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
+
 ### Enable eBPF data plane
 ```bash
 rustup toolchain install nightly
