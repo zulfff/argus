@@ -59,6 +59,8 @@ else
     DEPS="$DEPS build-essential pkg-config libssl-dev"
 fi
 apt-get install -y -qq $DEPS 2>/dev/null || true
+# sqlx needs libpq for postgres feature at build time
+apt-get install -y -qq libpq-dev 2>/dev/null || true
 ok "System dependencies installed"
 
 # ── Install Rust (only if building from source) ───────────

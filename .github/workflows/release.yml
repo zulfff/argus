@@ -8,59 +8,72 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 3
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
 
 jobs:
   build:
     name: Build (${{ matrix.target }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            cross: false
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            cross: true
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
 
-      - name: Install dependencies
+      - name: Install system deps
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential pkg-config libssl-dev libpq-dev
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            sudo apt-get install -y -qq gcc-aarch64-linux-gnu
+          fi
 
-      - name: Cache cargo
-        uses: actions/cache@v4
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.target }}
+
+      - name: Configure cargo for cross
+        if: matrix.cross
+        run: |
+          mkdir -p .cargo
+          cat >> .cargo/config.toml << 'EOF'
+          [target.aarch64-unknown-linux-gnu]
+          linker = "aarch64-linux-gnu-gcc"
+          EOF
 
       - name: Build argus-api
-        run: cargo build --release --target ${{ matrix.target }} -p argus-api --workspace --exclude argus-ebpf
+        run: cargo build --release --target ${{ matrix.target }} -p argus-api
 
       - name: Build argus-cli
-        run: cargo build --release --target ${{ matrix.target }} -p argus-cli --workspace --exclude argus-ebpf
+        run: cargo build --release --target ${{ matrix.target }} -p argus-cli
 
-      - name: Rename binaries
+      - name: Prepare artifacts
         run: |
           mkdir -p release
           cp target/${{ matrix.target }}/release/argus-api  release/argus-api-${{ matrix.target }}
           cp target/${{ matrix.target }}/release/argus-cli  release/argus-cli-${{ matrix.target }}
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ matrix.target }}
-          path: release/
+          path: release/*
 
   release:
-    name: GitHub Release
+    name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
@@ -72,13 +85,16 @@ jobs:
           path: release
           merge-multiple: true
 
-      - name: List files
-        run: ls -la release/
+      - name: Verify artifacts
+        run: |
+          echo "Release artifacts:"
+          ls -lh release/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: release/*
           generate_release_notes: true
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
