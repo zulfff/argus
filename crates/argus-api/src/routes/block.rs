@@ -29,10 +29,10 @@ pub async fn block_ip(
 pub async fn unblock_ip(
     State(state): State<Arc<AppState>>,
     Path(ip): Path<String>,
-) -> Json<serde_json::Value> {
-    if let Ok(addr) = ip.parse::<std::net::IpAddr>() {
-        state.scan_detector.unblock_ip(addr);
-    }
-
-    Json(serde_json::json!({"unblocked": ip}))
+) -> Result<Json<serde_json::Value>, Json<serde_json::Value>> {
+    let addr: std::net::IpAddr = ip
+        .parse()
+        .map_err(|e| Json(serde_json::json!({"error": format!("invalid IP: {}", e)})))?;
+    state.scan_detector.unblock_ip(addr);
+    Ok(Json(serde_json::json!({"unblocked": addr.to_string()})))
 }

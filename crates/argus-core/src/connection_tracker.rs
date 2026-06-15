@@ -38,10 +38,14 @@ impl ConnectionTracker {
     #[instrument(skip(self))]
     pub fn upsert(&self, key: ConnectionKey, now: DateTime<Utc>) {
         if let Ok(mut conns) = self.connections.lock() {
+            if let Some(entry) = conns.get_mut(&key) {
+                entry.last_seen = now;
+                return;
+            }
             if conns.len() >= self.max_entries {
                 self.evict_lru(&mut conns);
             }
-            let entry = conns.entry(key.clone()).or_insert(ConnectionEntry {
+            conns.insert(key.clone(), ConnectionEntry {
                 src_ip: key.src_ip,
                 dst_ip: key.dst_ip,
                 src_port: key.src_port,
@@ -55,10 +59,6 @@ impl ConnectionTracker {
                 bytes_in: 0,
                 bytes_out: 0,
             });
-            entry.last_seen = now;
-            if entry.state == ConnectionState::New {
-                entry.state = ConnectionState::Established;
-            }
         }
     }
 
@@ -132,7 +132,12 @@ mod tests {
         tracker.upsert(key.clone(), now);
         let entry = tracker.lookup(&key);
         assert!(entry.is_some());
-        assert_eq!(entry.unwrap().state, ConnectionState::Established);
+        assert_eq!(entry.unwrap().state, ConnectionState::New);
+
+        tracker.upsert(key.clone(), now);
+        tracker.update_state(&key, ConnectionState::Established);
+        let entry = tracker.lookup(&key).unwrap();
+        assert_eq!(entry.state, ConnectionState::Established);
     }
 
     #[test]

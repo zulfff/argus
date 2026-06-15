@@ -103,11 +103,14 @@ impl ZtnaMesh {
     }
 
     pub fn remove_interface(&self, name: &str) -> Result<()> {
-        self.interfaces
+        let removed = self
+            .interfaces
             .lock()
             .map_err(|e| ArgusError::Internal(format!("lock error: {}", e)))?
             .remove(name);
-        Ok(())
+        removed
+            .map(|_| ())
+            .ok_or_else(|| ArgusError::NotFound(format!("interface {} not found", name)))
     }
 
     pub fn generate_wg_config(&self, iface_name: &str) -> Result<String> {

@@ -45,7 +45,8 @@ impl RuleEngine {
         protocol: Option<u8>,
         direction: Direction,
     ) -> Result<Option<MatchResult>> {
-        let rules = self.store.rules_by_direction(direction).await?;
+        let mut rules = self.store.rules_by_direction(direction).await?;
+        rules.sort_by_key(|r| r.priority);
         let mut matched: Option<MatchResult> = None;
 
         for rule in rules.iter().filter(|r| r.enabled) {
@@ -95,6 +96,8 @@ impl RuleEngine {
                 if !proto_matches(p, proto) {
                     return false;
                 }
+            } else {
+                return false;
             }
         }
         true

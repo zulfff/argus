@@ -77,6 +77,10 @@ pub struct VyosDiffResult {
 
 impl VyosClient {
     pub fn new(address: String, port: Option<u16>) -> Self {
+        let hostname = address.split(':').next().unwrap_or(&address).to_string();
+        let parsed_port = address.rsplit_once(':').and_then(|(_, p)| p.parse::<u16>().ok());
+        let effective_port = port.or(parsed_port).unwrap_or(DEFAULT_PORT);
+
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(HTTP_TIMEOUT_SECS))
             .connect_timeout(Duration::from_secs(10))
@@ -85,20 +89,19 @@ impl VyosClient {
             .build()
             .expect("failed to build reqwest client");
 
-        let hostname = address.split(':').next().unwrap_or(&address).to_string();
-
         Self {
             device: VyosDeviceInfo {
-                hostname,
-                address,
-                port: port.unwrap_or(DEFAULT_PORT),
+                hostname: hostname.clone(),
+                address: address.clone(),
+                port: effective_port,
             },
             client,
         }
     }
 
     pub fn device_url(&self) -> String {
-        format!("https://{}:{}", self.device.address, self.device.port)
+        let host = self.device.address.split(':').next().unwrap_or(&self.device.address);
+        format!("https://{}:{}", host, self.device.port)
     }
 
     #[instrument(skip(self))]

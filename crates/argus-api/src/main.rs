@@ -39,7 +39,7 @@ pub fn app(state: Arc<AppState>) -> Router {
             .per_second(100)
             .burst_size(200)
             .finish()
-            .expect("failed to build rate limiter config"),
+            .expect("governor config builder failed"),
     );
 
     Router::new()
@@ -152,13 +152,11 @@ async fn try_main() -> anyhow::Result<()> {
 
     let admin_user = std::env::var("ARGUS_ADMIN_USER").unwrap_or_else(|_| "admin".into());
     let admin_pass = std::env::var("ARGUS_ADMIN_PASS").unwrap_or_else(|_| {
-        warn!("ARGUS_ADMIN_PASS not set — generating random admin password");
         let pass = hex::encode({
             let mut buf = [0u8; 16];
             rand::thread_rng().fill_bytes(&mut buf);
             buf
         });
-        info!("Generated admin password: {}", pass);
         pass
     });
 
@@ -194,7 +192,7 @@ async fn try_main() -> anyhow::Result<()> {
     eprintln!("  ARGUS API — http://127.0.0.1:8443");
     eprintln!("  Health:     http://127.0.0.1:8443/health");
     eprintln!("  Admin user: {}", admin_user);
-    eprintln!("  Admin pass: {}", admin_pass);
+    eprintln!("  Password:   set via ARGUS_ADMIN_PASS env");
     eprintln!("  ========================================");
     eprintln!();
 

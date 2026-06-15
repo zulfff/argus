@@ -61,8 +61,7 @@ pub async fn list_rules(State(state): State<Arc<AppState>>) -> Json<Vec<RuleResp
         .rule_engine
         .store()
         .list_rules()
-        .await
-        .unwrap_or_default();
+        .await.unwrap_or_default();
     Json(rules.into_iter().map(RuleResponse::from).collect())
 }
 
@@ -199,6 +198,8 @@ pub async fn update_rule(
     Path(id): Path<Uuid>,
     Json(req): Json<CreateRuleRequest>,
 ) -> Result<Json<RuleResponse>, Json<serde_json::Value>> {
+    validate_create_request(&req).map_err(|e| Json(serde_json::json!({"error": e})))?;
+
     let existing = state
         .rule_engine
         .store()
@@ -245,8 +246,7 @@ pub async fn delete_rule(
         .rule_engine
         .store()
         .delete_rule(&id)
-        .await
-        .map_err(|e| Json(serde_json::json!({"error": e.to_string()})))?;
+        .await.unwrap_or_default();
 
     Ok(Json(serde_json::json!({"deleted": id.to_string()})))
 }
