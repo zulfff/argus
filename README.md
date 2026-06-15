@@ -32,22 +32,37 @@ routers, and full observability — all in Rust, all memory-safe.
 git clone https://github.com/zulfff/argus.git
 cd argus
 
-# Minimal build tools
-sudo apt-get install -y build-essential pkg-config libssl-dev
+# 1. Install build deps
+sudo apt-get install -y build-essential pkg-config libssl-dev libpq-dev
 
-# Build & run
+# 2. Set JWT secret (REQUIRED — server refuses without it)
+export ARGUS_JWT_SECRET="change-me-to-a-random-32-plus-character-string"
+
+# 3. Build & run
 cargo build --release --workspace --exclude argus-ebpf
 cargo run --release -p argus-api
-
-# CLI in another terminal
-cargo run --release -p argus-cli -- rules
+# Watch logs for auto-generated admin password: "Generated admin password: xxxx"
 ```
 
 ### First Login
 
-- **URL:** http://127.0.0.1:8443/api/v1/auth/login
-- **Username:** `admin` (default, configurable via `ARGUS_ADMIN_USER`)
-- **Password:** set via `ARGUS_ADMIN_PASS` env var, or auto-generated
+```bash
+# Health check
+curl http://127.0.0.1:8443/health
+
+# Replace <password> with the one from startup logs
+curl -X POST http://127.0.0.1:8443/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"<password>"}'
+```
+
+| Setting | Value | Notes |
+|---------|-------|-------|
+| API URL | `http://127.0.0.1:8443` | HTTP — TLS via reverse proxy in production |
+| Username | `admin` | Override with `ARGUS_ADMIN_USER` |
+| Password | auto-generated | Override with `ARGUS_ADMIN_PASS` |
+| JWT Secret | **required** | Set `ARGUS_JWT_SECRET` ≥ 32 bytes |
+| Log Level | `argus=info` | Set `RUST_LOG` |
 
 ### Enable eBPF data plane
 ```bash
@@ -67,7 +82,7 @@ cargo +nightly build --release -p argus-ebpf
 | `DATABASE_URL` | No | — | PostgreSQL (optional, in-memory default) |
 | `REDIS_URL` | No | — | Redis (optional) |
 
-> Startup refuses if `ARGUS_JWT_SECRET` is < 32 bytes. No hardcoded fallback.
+> **Without `ARGUS_JWT_SECRET` ≥ 32 bytes, the server refuses to start.** No fallback, no hardcoded secret.
 
 ## Security
 
