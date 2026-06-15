@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{info, warn, instrument};
+use tracing::{info, instrument, warn};
 
 use argus_common::error::{ArgusError, Result};
 
@@ -61,10 +61,7 @@ pub struct DriftDetector {
 }
 
 impl DriftDetector {
-    pub fn new(
-        netbox: Arc<NetboxClient>,
-        check_interval_secs: u64,
-    ) -> Self {
+    pub fn new(netbox: Arc<NetboxClient>, check_interval_secs: u64) -> Self {
         Self {
             netbox,
             vyos_clients: Arc::new(Mutex::new(HashMap::new())),
@@ -75,10 +72,7 @@ impl DriftDetector {
 
     pub async fn register_device(&self, hostname: String, address: String, port: Option<u16>) {
         let client = VyosClient::new(address, port);
-        self.vyos_clients
-            .lock()
-            .await
-            .insert(hostname, client);
+        self.vyos_clients.lock().await.insert(hostname, client);
     }
 
     #[instrument(skip(self))]
@@ -133,18 +127,10 @@ impl DriftDetector {
         Ok(reports)
     }
 
-    async fn check_device(
-        &self,
-        hostname: String,
-        vyos: &VyosClient,
-    ) -> Result<DriftReport> {
+    async fn check_device(&self, hostname: String, vyos: &VyosClient) -> Result<DriftReport> {
         let now = chrono::Utc::now();
 
-        let netbox_prefixes = self
-            .netbox
-            .get_prefixes(None)
-            .await
-            .unwrap_or_default();
+        let netbox_prefixes = self.netbox.get_prefixes(None).await.unwrap_or_default();
 
         let vyos_config = vyos.get_running_config().await.unwrap_or_default();
         let vyos_rules = vyos.get_firewall_rules().await.unwrap_or_default();
@@ -158,21 +144,29 @@ impl DriftDetector {
             let netbox_value = format!(
                 "prefix={} site={} vlan={}",
                 prefix.prefix,
-                prefix.site.as_ref()
+                prefix
+                    .site
+                    .as_ref()
                     .map(|s| s.name.as_str())
                     .unwrap_or("none"),
-                prefix.vlan.as_ref()
+                prefix
+                    .vlan
+                    .as_ref()
                     .map(|v| v.name.as_str())
                     .unwrap_or("none"),
             );
 
-            if let Some(vyos_rule) = vyos_rules.iter().find(|r| {
-                r.action == "accept" && r.source.as_deref() == Some(&prefix.prefix)
-            }) {
+            if let Some(vyos_rule) = vyos_rules
+                .iter()
+                .find(|r| r.action == "accept" && r.source.as_deref() == Some(&prefix.prefix))
+            {
                 expected_rules.push(RuleComparison {
                     rule_name: name.clone(),
                     netbox_value,
-                    vyos_value: format!("action={} source={:?}", vyos_rule.action, vyos_rule.source),
+                    vyos_value: format!(
+                        "action={} source={:?}",
+                        vyos_rule.action, vyos_rule.source
+                    ),
                     matches: true,
                 });
             } else {
@@ -181,9 +175,10 @@ impl DriftDetector {
         }
 
         for rule in &vyos_rules {
-            if !netbox_prefixes.iter().any(|p| {
-                rule.source.as_deref() == Some(&p.prefix)
-            }) && rule.action == "accept"
+            if !netbox_prefixes
+                .iter()
+                .any(|p| rule.source.as_deref() == Some(&p.prefix))
+                && rule.action == "accept"
             {
                 unexpected_rules.push(format!(
                     "rule-{} action={} source={:?}",
@@ -214,10 +209,7 @@ impl DriftDetector {
         })
     }
 
-    pub async fn determine_remediation(
-        &self,
-        report: &DriftReport,
-    ) -> RemediationAction {
+    pub async fn determine_remediation(&self, report: &DriftReport) -> RemediationAction {
         if report.missing_rules.len() > 10 || report.unexpected_rules.len() > 10 {
             return RemediationAction::Alert {
                 severity: AlertSeverity::Critical,
@@ -281,7 +273,9 @@ impl ReconciliationEngine {
 
             match &action {
                 WebhookAction::ReconcileDevice {
-                    device_name, reason, ..
+                    device_name,
+                    reason,
+                    ..
                 } => {
                     remediations.push(RemediationAction::PushConfig {
                         device: device_name.clone(),

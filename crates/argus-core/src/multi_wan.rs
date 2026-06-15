@@ -1,11 +1,11 @@
+use chrono::{DateTime, Utc};
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Mutex;
 use std::time::Duration;
-use chrono::{DateTime, Utc};
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
-use tracing::{info, warn, instrument};
+use tracing::{info, instrument, warn};
 
 use argus_common::error::{ArgusError, Result};
 
@@ -76,15 +76,17 @@ impl MultiWanManager {
 
         for endpoint in &link.health_endpoints {
             if !endpoint.starts_with("https://") {
-                return Err(ArgusError::Validation(
-                    format!("health endpoint '{}' must use HTTPS", endpoint)
-                ));
+                return Err(ArgusError::Validation(format!(
+                    "health endpoint '{}' must use HTTPS",
+                    endpoint
+                )));
             }
         }
 
-        let mut links = self.links.lock().map_err(|e| {
-            ArgusError::Internal(format!("lock error: {}", e))
-        })?;
+        let mut links = self
+            .links
+            .lock()
+            .map_err(|e| ArgusError::Internal(format!("lock error: {}", e)))?;
 
         if links.contains_key(&name) {
             return Err(ArgusError::Validation(format!(
@@ -95,9 +97,10 @@ impl MultiWanManager {
 
         links.insert(name.clone(), link);
 
-        let mut statuses = self.statuses.lock().map_err(|e| {
-            ArgusError::Internal(format!("lock error: {}", e))
-        })?;
+        let mut statuses = self
+            .statuses
+            .lock()
+            .map_err(|e| ArgusError::Internal(format!("lock error: {}", e)))?;
 
         statuses.insert(
             name.clone(),
@@ -113,9 +116,10 @@ impl MultiWanManager {
         );
 
         if is_primary {
-            let mut active = self.active_link.lock().map_err(|e| {
-                ArgusError::Internal(format!("lock error: {}", e))
-            })?;
+            let mut active = self
+                .active_link
+                .lock()
+                .map_err(|e| ArgusError::Internal(format!("lock error: {}", e)))?;
             if active.is_none() {
                 *active = Some(name);
             }

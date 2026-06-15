@@ -1,8 +1,8 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 use std::sync::Mutex;
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 const MAX_LOG_ENTRIES: usize = 100_000;
@@ -57,15 +57,7 @@ impl AuditLog {
                 hex::encode(hasher.finalize())
             });
 
-        let hash = Self::compute_hash(
-            &id,
-            now,
-            actor,
-            action,
-            resource,
-            details,
-            &previous_hash,
-        );
+        let hash = Self::compute_hash(&id, now, actor, action, resource, details, &previous_hash);
 
         let entry = AuditEntry {
             id,
@@ -229,8 +221,22 @@ mod tests {
     fn test_audit_log_chain() {
         let log = AuditLog::new();
 
-        let e1 = log.log("admin", "rule.create", "firewall", "Created rule block-ssh", None, true);
-        let e2 = log.log("admin", "rule.apply", "firewall", "Applied ruleset v2", None, true);
+        let e1 = log.log(
+            "admin",
+            "rule.create",
+            "firewall",
+            "Created rule block-ssh",
+            None,
+            true,
+        );
+        let e2 = log.log(
+            "admin",
+            "rule.apply",
+            "firewall",
+            "Applied ruleset v2",
+            None,
+            true,
+        );
 
         assert_eq!(e2.previous_hash, e1.hash);
         assert_ne!(e1.hash, e2.hash);

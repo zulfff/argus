@@ -10,7 +10,7 @@ use network_types::{
     udp::UdpHdr,
 };
 
-use crate::maps::{BLOCKLIST, ALLOWLIST, CONNTRACK, RATE_LIMIT_BUCKETS, PER_CPU_PACKETS};
+use crate::maps::{ALLOWLIST, BLOCKLIST, CONNTRACK, PER_CPU_PACKETS, RATE_LIMIT_BUCKETS};
 
 const ETH_HDR_LEN: usize = core::mem::size_of::<EthHdr>();
 const IPV4_HDR_LEN: usize = core::mem::size_of::<Ipv4Hdr>();

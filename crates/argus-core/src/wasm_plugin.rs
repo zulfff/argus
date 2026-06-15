@@ -1,6 +1,6 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
-use serde::{Deserialize, Serialize};
 use tracing::{error, info, instrument};
 
 use argus_common::error::{ArgusError, Result};
@@ -91,9 +91,10 @@ impl WasmPluginEngine {
         }
 
         let id = format!("{}/{}", name, version);
-        let mut plugins = self.plugins.lock().map_err(|e| {
-            ArgusError::Internal(format!("lock error: {}", e))
-        })?;
+        let mut plugins = self
+            .plugins
+            .lock()
+            .map_err(|e| ArgusError::Internal(format!("lock error: {}", e)))?;
 
         if plugins.contains_key(&id) {
             return Err(ArgusError::Validation(format!(
@@ -120,14 +121,11 @@ impl WasmPluginEngine {
         Ok(())
     }
 
-    fn register_hooks(
-        &self,
-        plugin_id: &str,
-        hook_points: &[HookPoint],
-    ) -> Result<()> {
-        let mut hooks = self.hooks.lock().map_err(|e| {
-            ArgusError::Internal(format!("lock error: {}", e))
-        })?;
+    fn register_hooks(&self, plugin_id: &str, hook_points: &[HookPoint]) -> Result<()> {
+        let mut hooks = self
+            .hooks
+            .lock()
+            .map_err(|e| ArgusError::Internal(format!("lock error: {}", e)))?;
 
         for hp in hook_points {
             hooks
@@ -140,11 +138,7 @@ impl WasmPluginEngine {
     }
 
     #[instrument(skip(self, metadata))]
-    pub fn run_hook(
-        &self,
-        hook_point: HookPoint,
-        metadata: &FlowMetadata,
-    ) -> Vec<PluginOutput> {
+    pub fn run_hook(&self, hook_point: HookPoint, metadata: &FlowMetadata) -> Vec<PluginOutput> {
         let hooks = match self.hooks.lock() {
             Ok(h) => h,
             Err(_) => return Vec::new(),
@@ -184,26 +178,23 @@ impl WasmPluginEngine {
         outputs
     }
 
-    fn execute_plugin(
-        &self,
-        plugin: &WasmPlugin,
-        metadata: &FlowMetadata,
-    ) -> Result<PluginOutput> {
-        let engine = wasmtime::Engine::new(&wasmtime::Config::new()
-            .epoch_interruption(true)
-            .cranelift_nan_canonicalization(true)
-            .consume_fuel(true))
-            .map_err(|e| ArgusError::Internal(format!("wasmtime engine: {}", e)))?;
+    fn execute_plugin(&self, plugin: &WasmPlugin, metadata: &FlowMetadata) -> Result<PluginOutput> {
+        let engine = wasmtime::Engine::new(
+            &wasmtime::Config::new()
+                .epoch_interruption(true)
+                .cranelift_nan_canonicalization(true)
+                .consume_fuel(true),
+        )
+        .map_err(|e| ArgusError::Internal(format!("wasmtime engine: {}", e)))?;
 
         let mut store = wasmtime::Store::new(&engine, ());
 
-        store.set_fuel(100_000).map_err(|e| {
-            ArgusError::Internal(format!("fuel limit: {}", e))
-        })?;
+        store
+            .set_fuel(100_000)
+            .map_err(|e| ArgusError::Internal(format!("fuel limit: {}", e)))?;
 
-        let module = wasmtime::Module::new(&engine, &plugin.wasm_bytes).map_err(|e| {
-            ArgusError::Validation(format!("WASM module compile: {}", e))
-        })?;
+        let module = wasmtime::Module::new(&engine, &plugin.wasm_bytes)
+            .map_err(|e| ArgusError::Validation(format!("WASM module compile: {}", e)))?;
 
         let metadata_json = serde_json::to_vec(metadata)
             .map_err(|e| ArgusError::Serialization(format!("metadata serialization: {}", e)))?;
@@ -224,12 +215,13 @@ impl WasmPluginEngine {
             .instantiate(&mut store, &module)
             .map_err(|e| ArgusError::External(format!("WASM instantiate: {}", e)))?;
 
-        if let Some(process_fn) = instance.get_typed_func::<(i32, i32), i32>(&mut store, "process")
+        if let Some(process_fn) = instance
+            .get_typed_func::<(i32, i32), i32>(&mut store, "process")
             .ok()
         {
-            let _ = process_fn.call(&mut store, (0, 0)).map_err(|e| {
-                ArgusError::External(format!("WASM call: {}", e))
-            })?;
+            let _ = process_fn
+                .call(&mut store, (0, 0))
+                .map_err(|e| ArgusError::External(format!("WASM call: {}", e)))?;
         }
 
         Ok(PluginOutput {
@@ -240,17 +232,19 @@ impl WasmPluginEngine {
     }
 
     pub fn unload_plugin(&self, plugin_id: &str) -> Result<()> {
-        let mut plugins = self.plugins.lock().map_err(|e| {
-            ArgusError::Internal(format!("lock error: {}", e))
-        })?;
+        let mut plugins = self
+            .plugins
+            .lock()
+            .map_err(|e| ArgusError::Internal(format!("lock error: {}", e)))?;
 
-        let plugin = plugins.remove(plugin_id).ok_or_else(|| {
-            ArgusError::NotFound(format!("plugin {} not found", plugin_id))
-        })?;
+        let plugin = plugins
+            .remove(plugin_id)
+            .ok_or_else(|| ArgusError::NotFound(format!("plugin {} not found", plugin_id)))?;
 
-        let mut hooks = self.hooks.lock().map_err(|e| {
-            ArgusError::Internal(format!("lock error: {}", e))
-        })?;
+        let mut hooks = self
+            .hooks
+            .lock()
+            .map_err(|e| ArgusError::Internal(format!("lock error: {}", e)))?;
 
         for hp in &plugin.hook_points {
             if let Some(ids) = hooks.get_mut(hp) {
@@ -311,7 +305,10 @@ mod tests {
     #[test]
     fn test_hook_registration() {
         let engine = WasmPluginEngine::new();
-        let result = engine.register_hooks("test/v1", &[HookPoint::OnRuleMatch, HookPoint::OnAlertGenerated]);
+        let result = engine.register_hooks(
+            "test/v1",
+            &[HookPoint::OnRuleMatch, HookPoint::OnAlertGenerated],
+        );
         assert!(result.is_ok());
     }
 }

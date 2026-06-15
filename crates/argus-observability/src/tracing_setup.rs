@@ -8,8 +8,7 @@ pub fn init_tracing() {
         .with_file(true)
         .with_line_number(true)
         .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("argus=info")),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("argus=info")),
         )
         .init();
 }

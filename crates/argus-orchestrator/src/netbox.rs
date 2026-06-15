@@ -247,10 +247,7 @@ impl NetboxClient {
     }
 
     #[instrument(skip(self))]
-    pub async fn get_ip_addresses(
-        &self,
-        device_id: Option<u64>,
-    ) -> Result<Vec<NetboxIpAddress>> {
+    pub async fn get_ip_addresses(&self, device_id: Option<u64>) -> Result<Vec<NetboxIpAddress>> {
         let mut params = Vec::new();
         if let Some(d) = device_id {
             params.push(("device_id", d.to_string()));
@@ -324,7 +321,8 @@ impl NetboxClient {
 
     #[instrument(skip(self))]
     pub async fn delete_ip_address(&self, id: u64) -> Result<()> {
-        self.delete(&format!("/api/ipam/ip-addresses/{}/", id)).await
+        self.delete(&format!("/api/ipam/ip-addresses/{}/", id))
+            .await
     }
 
     #[instrument(skip(self))]
@@ -355,7 +353,9 @@ impl NetboxClient {
                         "NetBox {} event for {} {}",
                         event.event,
                         event.model,
-                        event.data.get("address")
+                        event
+                            .data
+                            .get("address")
                             .and_then(|v| v.as_str())
                             .unwrap_or("unknown")
                     ),
@@ -377,7 +377,10 @@ impl NetboxClient {
         self.check_circuit()?;
 
         let mut all_results = Vec::new();
-        let mut next_url = Some(format!("{}{}?limit={}", self.base_url, path, DEFAULT_PAGE_SIZE));
+        let mut next_url = Some(format!(
+            "{}{}?limit={}",
+            self.base_url, path, DEFAULT_PAGE_SIZE
+        ));
 
         for (k, v) in params {
             if let Some(ref mut url) = next_url {
@@ -475,9 +478,10 @@ impl NetboxClient {
         }
 
         self.record_circuit_success();
-        response.json().await.map_err(|e| {
-            ArgusError::External(format!("NetBox parse error: {}", e))
-        })
+        response
+            .json()
+            .await
+            .map_err(|e| ArgusError::External(format!("NetBox parse error: {}", e)))
     }
 
     async fn post<T: serde::de::DeserializeOwned>(
@@ -513,9 +517,10 @@ impl NetboxClient {
         }
 
         self.record_circuit_success();
-        response.json().await.map_err(|e| {
-            ArgusError::External(format!("NetBox parse error: {}", e))
-        })
+        response
+            .json()
+            .await
+            .map_err(|e| ArgusError::External(format!("NetBox parse error: {}", e)))
     }
 
     async fn put<T: serde::de::DeserializeOwned>(
@@ -550,9 +555,10 @@ impl NetboxClient {
         }
 
         self.record_circuit_success();
-        response.json().await.map_err(|e| {
-            ArgusError::External(format!("NetBox parse error: {}", e))
-        })
+        response
+            .json()
+            .await
+            .map_err(|e| ArgusError::External(format!("NetBox parse error: {}", e)))
     }
 
     async fn delete(&self, path: &str) -> Result<()> {

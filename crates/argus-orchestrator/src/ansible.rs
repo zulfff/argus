@@ -149,14 +149,8 @@ impl AnsibleRunner {
             child.wait_with_output(),
         )
         .await
-        .map_err(|_| {
-            ArgusError::External(
-                "ansible-playbook timed out after 300 seconds".into(),
-            )
-        })?
-        .map_err(|e| {
-            ArgusError::External(format!("ansible-playbook IO error: {}", e))
-        })?;
+        .map_err(|_| ArgusError::External("ansible-playbook timed out after 300 seconds".into()))?
+        .map_err(|e| ArgusError::External(format!("ansible-playbook IO error: {}", e)))?;
 
         let duration_secs = start.elapsed().as_secs_f64();
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -248,9 +242,10 @@ impl AnsibleRunner {
         cmd.arg("-o");
         cmd.arg(host);
 
-        let output = cmd.output().await.map_err(|e| {
-            ArgusError::External(format!("ansible ping failed: {}", e))
-        })?;
+        let output = cmd
+            .output()
+            .await
+            .map_err(|e| ArgusError::External(format!("ansible ping failed: {}", e)))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
 

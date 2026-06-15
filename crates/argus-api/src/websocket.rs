@@ -13,8 +13,8 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{debug, warn};
 
-use crate::AppState;
 use crate::auth::JwtAuth;
+use crate::AppState;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LiveEvent {
@@ -96,22 +96,22 @@ pub async fn ws_handler(
     Query(query): Query<WsQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let token = query.token.ok_or_else(|| {
-        (StatusCode::UNAUTHORIZED, "Missing token query parameter".into())
+        (
+            StatusCode::UNAUTHORIZED,
+            "Missing token query parameter".into(),
+        )
     })?;
 
     let jwt = JwtAuth::new(&state.auth_config.jwt_secret);
-    let _claims = jwt.validate_token(&token).map_err(|e| {
-        (StatusCode::UNAUTHORIZED, format!("Invalid token: {}", e))
-    })?;
+    let _claims = jwt
+        .validate_token(&token)
+        .map_err(|e| (StatusCode::UNAUTHORIZED, format!("Invalid token: {}", e)))?;
 
     let event_bus = state.event_bus.subscribe();
     Ok(ws.on_upgrade(move |socket| handle_ws(socket, event_bus)))
 }
 
-async fn handle_ws(
-    mut socket: WebSocket,
-    mut rx: broadcast::Receiver<LiveEvent>,
-) {
+async fn handle_ws(mut socket: WebSocket, mut rx: broadcast::Receiver<LiveEvent>) {
     loop {
         tokio::select! {
             event = rx.recv() => {

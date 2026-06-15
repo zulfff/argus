@@ -1,8 +1,8 @@
+use argus_common::types::ScanAlert;
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Mutex;
-use chrono::{DateTime, Utc};
-use argus_common::types::ScanAlert;
 use tracing::instrument;
 
 const PORT_SCAN_THRESHOLD: usize = 10;
@@ -112,14 +112,10 @@ impl ScanDetector {
     pub fn gc(&self) {
         let now = Utc::now();
         if let Ok(mut attempts) = self.attempts.lock() {
-            attempts.retain(|_, r| {
-                (now - r.last_seen).num_seconds() < PORT_SCAN_WINDOW_SECS * 2
-            });
+            attempts.retain(|_, r| (now - r.last_seen).num_seconds() < PORT_SCAN_WINDOW_SECS * 2);
         }
         if let Ok(mut blocked) = self.blocked.lock() {
-            blocked.retain(|_, &mut since| {
-                (now - since).num_seconds() < AUTO_BLOCK_DURATION_SECS
-            });
+            blocked.retain(|_, &mut since| (now - since).num_seconds() < AUTO_BLOCK_DURATION_SECS);
         }
     }
 

@@ -13,9 +13,7 @@ pub struct StatsResponse {
     pub rate_limit_buckets: usize,
 }
 
-pub async fn get_stats(
-    State(state): State<Arc<AppState>>,
-) -> Json<StatsResponse> {
+pub async fn get_stats(State(state): State<Arc<AppState>>) -> Json<StatsResponse> {
     Json(StatsResponse {
         packets_allowed: 0,
         packets_dropped: 0,

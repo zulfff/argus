@@ -169,9 +169,10 @@ impl VyosClient {
             )));
         }
 
-        let raw: serde_json::Value = response.json().await.map_err(|e| {
-            ArgusError::External(format!("VyOS config parse error: {}", e))
-        })?;
+        let raw: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| ArgusError::External(format!("VyOS config parse error: {}", e)))?;
 
         raw.get("data")
             .and_then(|d| d.get("config"))
@@ -205,7 +206,9 @@ impl VyosClient {
             .await
             .map_err(|e| ArgusError::Network(format!("VyOS config load failed: {}", e)))?;
 
-        self.check_response(response, "load config").await.map(|_| ())
+        self.check_response(response, "load config")
+            .await
+            .map(|_| ())
     }
 
     #[instrument(skip(self))]
@@ -254,9 +257,10 @@ impl VyosClient {
             .await
             .map_err(|e| ArgusError::Network(format!("VyOS compare failed: {}", e)))?;
 
-        let raw: serde_json::Value = response.json().await.map_err(|e| {
-            ArgusError::External(format!("VyOS compare parse error: {}", e))
-        })?;
+        let raw: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| ArgusError::External(format!("VyOS compare parse error: {}", e)))?;
 
         raw.get("data")
             .and_then(|d| d.get("diff"))
@@ -421,9 +425,10 @@ impl VyosClient {
             .await
             .map_err(|e| ArgusError::Network(format!("VyOS op command failed: {}", e)))?;
 
-        let raw: serde_json::Value = response.json().await.map_err(|e| {
-            ArgusError::External(format!("VyOS op parse: {}", e))
-        })?;
+        let raw: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| ArgusError::External(format!("VyOS op parse: {}", e)))?;
 
         let output = raw
             .get("data")
@@ -435,11 +440,7 @@ impl VyosClient {
         Ok(output)
     }
 
-    async fn check_response(
-        &self,
-        response: reqwest::Response,
-        operation: &str,
-    ) -> Result<bool> {
+    async fn check_response(&self, response: reqwest::Response, operation: &str) -> Result<bool> {
         if !response.status().is_success() {
             return Err(ArgusError::External(format!(
                 "VyOS {} failed with status {}",
@@ -448,9 +449,10 @@ impl VyosClient {
             )));
         }
 
-        let raw: serde_json::Value = response.json().await.map_err(|e| {
-            ArgusError::External(format!("VyOS response parse error: {}", e))
-        })?;
+        let raw: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| ArgusError::External(format!("VyOS response parse error: {}", e)))?;
 
         if let Some(true) = raw.get("success").and_then(|s| s.as_bool()) {
             return Ok(true);
@@ -475,12 +477,7 @@ impl VyosClient {
             let line = line.trim();
             if line.starts_with("rule ") {
                 if let Some(rest) = line.strip_prefix("rule ") {
-                    if let Ok(id) = rest
-                        .split_whitespace()
-                        .next()
-                        .unwrap_or("0")
-                        .parse::<u32>()
-                    {
+                    if let Ok(id) = rest.split_whitespace().next().unwrap_or("0").parse::<u32>() {
                         rule_id = id;
                     }
                 }

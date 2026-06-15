@@ -1,10 +1,10 @@
+use chrono::{DateTime, Utc};
+use reqwest::Client;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Mutex;
 use std::time::Duration;
-use chrono::{DateTime, Utc};
-use reqwest::Client;
-use tracing::{info, warn, instrument};
+use tracing::{info, instrument, warn};
 
 use argus_common::error::{ArgusError, Result};
 
@@ -124,7 +124,10 @@ impl ThreatIntelligence {
             };
 
             if entries.len() >= MAX_BLOCKLIST_SIZE {
-                warn!("Blocklist full at {} entries, skipping AbuseIPDB", entries.len());
+                warn!(
+                    "Blocklist full at {} entries, skipping AbuseIPDB",
+                    entries.len()
+                );
                 return Ok(0);
             }
 
@@ -190,17 +193,11 @@ impl ThreatIntelligence {
         }
     }
 
-    pub async fn auto_refresh_all(
-        &self,
-        abuseipdb_key: Option<String>,
-        confidence_min: u8,
-    ) {
+    pub async fn auto_refresh_all(&self, abuseipdb_key: Option<String>, confidence_min: u8) {
         let should_refresh = match self.last_refresh.lock() {
-            Ok(last) => {
-                last.map_or(true, |t| {
-                    (Utc::now() - t).num_seconds() as u64 >= REFRESH_INTERVAL_SECS
-                })
-            }
+            Ok(last) => last.map_or(true, |t| {
+                (Utc::now() - t).num_seconds() as u64 >= REFRESH_INTERVAL_SECS
+            }),
             Err(_) => true,
         };
 

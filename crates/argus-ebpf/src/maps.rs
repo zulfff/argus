@@ -1,7 +1,7 @@
 #![no_std]
 
-use aya_ebpf::maps::{HashMap, PerCpuArray, PerfEventArray};
 use aya_ebpf::macros::map;
+use aya_ebpf::maps::{HashMap, PerCpuArray, PerfEventArray};
 
 #[map]
 pub static BLOCKLIST: HashMap<u32, u32> = HashMap::with_max_entries(65536, 0);

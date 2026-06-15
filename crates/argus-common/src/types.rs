@@ -10,8 +10,7 @@ pub enum Action {
     RateLimit { packets_per_second: u64 },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Direction {
     Inbound,
     Outbound,

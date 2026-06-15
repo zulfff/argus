@@ -1,7 +1,7 @@
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Mutex;
-use chrono::{DateTime, Utc};
 use tracing::instrument;
 
 pub struct TokenBucket {

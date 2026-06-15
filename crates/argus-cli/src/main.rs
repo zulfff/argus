@@ -23,8 +23,12 @@ enum Commands {
     Stats,
     #[command(alias = "conn")]
     Connections,
-    Block { ip: String },
-    Unblock { ip: String },
+    Block {
+        ip: String,
+    },
+    Unblock {
+        ip: String,
+    },
     #[command(alias = "mon")]
     Tui,
 }
@@ -109,8 +113,10 @@ async fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
 
-            println!("{:<5} {:<8} {:<12} {:<18} {:<18} {:<16} {:<8} {:<10}",
-                "PRI", "ENABLED", "ACTION", "SRC", "DST", "PROTO", "DIR", "NAME");
+            println!(
+                "{:<5} {:<8} {:<12} {:<18} {:<18} {:<16} {:<8} {:<10}",
+                "PRI", "ENABLED", "ACTION", "SRC", "DST", "PROTO", "DIR", "NAME"
+            );
             println!("{}", "-".repeat(100));
 
             for r in &rules {
@@ -119,8 +125,10 @@ async fn main() -> anyhow::Result<()> {
                 let proto = r.protocol.as_deref().unwrap_or("any");
                 let dir = &r.direction;
                 let enabled = if r.enabled { "YES" } else { "NO" };
-                println!("{:<5} {:<8} {:<12} {:<18} {:<18} {:<16} {:<8} {:<10}",
-                    r.priority, enabled, r.action, src, dst, proto, dir, r.name);
+                println!(
+                    "{:<5} {:<8} {:<12} {:<18} {:<18} {:<16} {:<8} {:<10}",
+                    r.priority, enabled, r.action, src, dst, proto, dir, r.name
+                );
             }
 
             println!("\nTotal: {} rules", rules.len());
@@ -153,13 +161,17 @@ async fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
 
-            println!("{:<18} {:<8} {:<18} {:<8} {:<6} {:<12}",
-                "SRC", "SPORT", "DST", "DPORT", "PROTO", "STATE");
+            println!(
+                "{:<18} {:<8} {:<18} {:<8} {:<6} {:<12}",
+                "SRC", "SPORT", "DST", "DPORT", "PROTO", "STATE"
+            );
             println!("{}", "-".repeat(76));
 
             for c in &conns {
-                println!("{:<18} {:<8} {:<18} {:<8} {:<6} {:<12}",
-                    c.src_ip, c.src_port, c.dst_ip, c.dst_port, c.protocol, c.state);
+                println!(
+                    "{:<18} {:<8} {:<18} {:<8} {:<6} {:<12}",
+                    c.src_ip, c.src_port, c.dst_ip, c.dst_port, c.protocol, c.state
+                );
             }
 
             println!("\nTotal: {} connections", conns.len());

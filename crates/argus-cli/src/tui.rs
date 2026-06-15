@@ -70,7 +70,9 @@ pub async fn run_tui(api_url: String) -> Result<()> {
     tokio::spawn(async move {
         let client = Client::new();
         loop {
-            let rules = fetch_rules(&client, &api_url_clone).await.unwrap_or_default();
+            let rules = fetch_rules(&client, &api_url_clone)
+                .await
+                .unwrap_or_default();
             let _ = tx.send(TuiEvent::Rules(rules)).await;
 
             let stats = fetch_stats(&client, &api_url_clone).await;
@@ -78,7 +80,9 @@ pub async fn run_tui(api_url: String) -> Result<()> {
                 let _ = tx.send(TuiEvent::Stats(s)).await;
             }
 
-            let conns = fetch_connections(&client, &api_url_clone).await.unwrap_or_default();
+            let conns = fetch_connections(&client, &api_url_clone)
+                .await
+                .unwrap_or_default();
             let _ = tx.send(TuiEvent::Connections(conns)).await;
 
             let _ = tx.send(TuiEvent::Tick).await;
@@ -112,23 +116,36 @@ pub async fn run_tui(api_url: String) -> Result<()> {
     }
 
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
 
     Ok(())
 }
 
 async fn fetch_rules(client: &Client, api_url: &str) -> Result<Vec<RuleItem>> {
-    let resp = client.get(format!("{}/api/v1/rules", api_url)).send().await?;
+    let resp = client
+        .get(format!("{}/api/v1/rules", api_url))
+        .send()
+        .await?;
     Ok(resp.json().await?)
 }
 
 async fn fetch_stats(client: &Client, api_url: &str) -> Result<StatsItem> {
-    let resp = client.get(format!("{}/api/v1/stats", api_url)).send().await?;
+    let resp = client
+        .get(format!("{}/api/v1/stats", api_url))
+        .send()
+        .await?;
     Ok(resp.json().await?)
 }
 
 async fn fetch_connections(client: &Client, api_url: &str) -> Result<Vec<ConnItem>> {
-    let resp = client.get(format!("{}/api/v1/connections", api_url)).send().await?;
+    let resp = client
+        .get(format!("{}/api/v1/connections", api_url))
+        .send()
+        .await?;
     Ok(resp.json().await?)
 }
 
@@ -185,35 +202,39 @@ impl TuiApp {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Cyan));
 
-        let items: Vec<ListItem> = self.rules.iter().map(|r| {
-            let status = if r.enabled {
-                Span::styled(" [ON] ", Style::default().fg(Color::Green))
-            } else {
-                Span::styled(" [OFF]", Style::default().fg(Color::Red))
-            };
+        let items: Vec<ListItem> = self
+            .rules
+            .iter()
+            .map(|r| {
+                let status = if r.enabled {
+                    Span::styled(" [ON] ", Style::default().fg(Color::Green))
+                } else {
+                    Span::styled(" [OFF]", Style::default().fg(Color::Red))
+                };
 
-            let action_color = match r.action.as_str() {
-                "deny" => Color::Red,
-                "allow" => Color::Green,
-                _ => Color::Yellow,
-            };
-            let action = Span::styled(
-                format!(" {:<12}", r.action),
-                Style::default().fg(action_color),
-            );
+                let action_color = match r.action.as_str() {
+                    "deny" => Color::Red,
+                    "allow" => Color::Green,
+                    _ => Color::Yellow,
+                };
+                let action = Span::styled(
+                    format!(" {:<12}", r.action),
+                    Style::default().fg(action_color),
+                );
 
-            let src = r.src_cidr.as_deref().unwrap_or("*");
-            let dst = r.dst_cidr.as_deref().unwrap_or("*");
-            let name = &r.name;
+                let src = r.src_cidr.as_deref().unwrap_or("*");
+                let dst = r.dst_cidr.as_deref().unwrap_or("*");
+                let name = &r.name;
 
-            let line = Line::from(vec![
-                status,
-                action,
-                Span::raw(format!(" src={:<18} dst={:<18} {}", src, dst, name)),
-            ]);
+                let line = Line::from(vec![
+                    status,
+                    action,
+                    Span::raw(format!(" src={:<18} dst={:<18} {}", src, dst, name)),
+                ]);
 
-            ListItem::new(line)
-        }).collect();
+                ListItem::new(line)
+            })
+            .collect();
 
         let list = List::new(items).block(block);
         f.render_widget(list, area);
@@ -231,12 +252,7 @@ impl TuiApp {
             self.connections
                 .iter()
                 .take(5)
-                .map(|c| {
-                    format!(
-                        "{} -> {} [{}]",
-                        c.src_ip, c.dst_ip, c.state
-                    )
-                })
+                .map(|c| format!("{} -> {} [{}]", c.src_ip, c.dst_ip, c.state))
                 .collect::<Vec<_>>()
                 .join("  |  ")
         };

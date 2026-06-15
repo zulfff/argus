@@ -1,5 +1,5 @@
-use argus_common::types::{Action, CidrRule, Direction};
 use argus_common::error::Result;
+use argus_common::types::{Action, CidrRule, Direction};
 use async_trait::async_trait;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -165,9 +165,9 @@ fn proto_matches(protocol: u8, proto_str: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::Ipv4Addr;
-    use argus_common::types::Action;
     use argus_common::error::ArgusError;
+    use argus_common::types::Action;
+    use std::net::Ipv4Addr;
 
     struct MockStore;
 
@@ -236,13 +236,17 @@ mod tests {
             &rule,
             IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)),
             IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
-            None, None, None
+            None,
+            None,
+            None
         ));
         assert!(!RuleEngine::rule_matches(
             &rule,
             IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)),
             IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
-            None, None, None
+            None,
+            None,
+            None
         ));
     }
 }

@@ -2,8 +2,8 @@ use axum::{extract::State, Json};
 use serde::Serialize;
 use std::sync::Arc;
 
-use argus_common::types::ConnectionState;
 use crate::AppState;
+use argus_common::types::ConnectionState;
 
 #[derive(Serialize)]
 pub struct ConnectionResponse {
@@ -15,9 +15,7 @@ pub struct ConnectionResponse {
     pub state: String,
 }
 
-pub async fn list_connections(
-    State(state): State<Arc<AppState>>,
-) -> Json<Vec<ConnectionResponse>> {
+pub async fn list_connections(State(state): State<Arc<AppState>>) -> Json<Vec<ConnectionResponse>> {
     let entries = state.connection_tracker.list_all();
     let resp: Vec<ConnectionResponse> = entries
         .into_iter()

@@ -1,7 +1,7 @@
+use chrono::{DateTime, Utc};
 use std::collections::{HashMap, VecDeque};
 use std::net::IpAddr;
 use std::sync::Mutex;
-use chrono::{DateTime, Utc};
 use tracing::instrument;
 
 const BASELINE_WINDOW_MINUTES: i64 = 60;
@@ -215,7 +215,9 @@ impl AnomalyDetector {
                 timestamp: Utc::now(),
                 description: format!(
                     "Connection spike: {} (baseline: {:.0} ± {:.0})",
-                    current.connection_count, baseline.mean_connections, baseline.stddev_connections,
+                    current.connection_count,
+                    baseline.mean_connections,
+                    baseline.stddev_connections,
                 ),
             });
         }

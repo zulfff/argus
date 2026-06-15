@@ -91,7 +91,8 @@ impl ConnectionTracker {
     }
 
     fn evict_lru(&self, conns: &mut HashMap<ConnectionKey, ConnectionEntry>) {
-        if let Some(oldest_key) = conns.iter()
+        if let Some(oldest_key) = conns
+            .iter()
             .min_by_key(|(_, e)| e.last_seen)
             .map(|(k, _)| k.clone())
         {
@@ -100,7 +101,10 @@ impl ConnectionTracker {
     }
 
     pub fn list_all(&self) -> Vec<ConnectionEntry> {
-        self.connections.lock().map(|c| c.values().cloned().collect()).unwrap_or_default()
+        self.connections
+            .lock()
+            .map(|c| c.values().cloned().collect())
+            .unwrap_or_default()
     }
 
     pub fn gc_interval(&self) -> u64 {
@@ -139,17 +143,23 @@ mod tests {
         let key1 = ConnectionKey {
             src_ip: IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)),
             dst_ip: IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
-            src_port: 1, dst_port: 80, protocol: 6,
+            src_port: 1,
+            dst_port: 80,
+            protocol: 6,
         };
         let key2 = ConnectionKey {
             src_ip: IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2)),
             dst_ip: IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
-            src_port: 2, dst_port: 80, protocol: 6,
+            src_port: 2,
+            dst_port: 80,
+            protocol: 6,
         };
         let key3 = ConnectionKey {
             src_ip: IpAddr::V4(Ipv4Addr::new(10, 0, 0, 3)),
             dst_ip: IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
-            src_port: 3, dst_port: 80, protocol: 6,
+            src_port: 3,
+            dst_port: 80,
+            protocol: 6,
         };
 
         tracker.upsert(key1.clone(), now);
@@ -166,7 +176,9 @@ mod tests {
         let key = ConnectionKey {
             src_ip: IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)),
             dst_ip: IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
-            src_port: 12345, dst_port: 80, protocol: 6,
+            src_port: 12345,
+            dst_port: 80,
+            protocol: 6,
         };
 
         tracker.upsert(key.clone(), now);

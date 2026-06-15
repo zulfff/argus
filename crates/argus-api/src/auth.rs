@@ -296,12 +296,10 @@ impl Clone for AuthenticatedUser {
 }
 
 impl AuthenticatedUser {
-    pub async fn from_request(
-        parts: &mut Parts,
-        jwt_auth: &JwtAuth,
-    ) -> Result<Self, AuthError> {
-        let TypedHeader(Authorization(bearer)) =
-            parts.extract::<TypedHeader<Authorization<Bearer>>>().await
+    pub async fn from_request(parts: &mut Parts, jwt_auth: &JwtAuth) -> Result<Self, AuthError> {
+        let TypedHeader(Authorization(bearer)) = parts
+            .extract::<TypedHeader<Authorization<Bearer>>>()
+            .await
             .map_err(|_| AuthError::MissingToken)?;
 
         let claims = jwt_auth

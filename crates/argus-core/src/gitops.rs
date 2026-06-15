@@ -1,7 +1,7 @@
-use std::path::{Path, PathBuf};
-use std::process::Command as StdCommand;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+use std::process::Command as StdCommand;
 use tracing::instrument;
 
 use argus_common::error::{ArgusError, Result};
@@ -64,9 +64,8 @@ impl GitOpsEngine {
     #[instrument(skip(self))]
     pub fn init(&mut self) -> Result<()> {
         if !self.repo_path.exists() {
-            std::fs::create_dir_all(&self.repo_path).map_err(|e| {
-                ArgusError::Config(format!("failed to create repo dir: {}", e))
-            })?;
+            std::fs::create_dir_all(&self.repo_path)
+                .map_err(|e| ArgusError::Config(format!("failed to create repo dir: {}", e)))?;
         }
 
         let git_dir = self.repo_path.join(".git");
@@ -163,24 +162,22 @@ impl GitOpsEngine {
         for file in &change.files_changed {
             let raw_path = self.repo_path.join(file);
 
-            let path = raw_path
-                .canonicalize()
-                .map_err(|e| ArgusError::Validation(
-                    format!("invalid config file path '{}': {}", file, e)
-                ))?;
+            let path = raw_path.canonicalize().map_err(|e| {
+                ArgusError::Validation(format!("invalid config file path '{}': {}", file, e))
+            })?;
 
             if !path.starts_with(&self.repo_path) {
-                return Err(ArgusError::Validation(
-                    format!("path traversal detected: '{}' is outside repo directory", file)
-                ));
+                return Err(ArgusError::Validation(format!(
+                    "path traversal detected: '{}' is outside repo directory",
+                    file
+                )));
             }
 
             if !path.exists() {
                 continue;
             }
 
-            let content = std::fs::read_to_string(&path)
-                .map_err(ArgusError::Io)?;
+            let content = std::fs::read_to_string(&path).map_err(ArgusError::Io)?;
 
             let ext = path.extension().and_then(|e| e.to_str());
             match ext {

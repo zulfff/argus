@@ -3,8 +3,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing::warn;
 
-use crate::AppState;
 use crate::auth::{JwtAuth, LoginRequest, RefreshRequest, TokenResponse};
+use crate::AppState;
 
 pub async fn login(
     State(state): State<Arc<AppState>>,

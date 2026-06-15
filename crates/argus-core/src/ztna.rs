@@ -1,8 +1,8 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Mutex;
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use argus_common::error::{ArgusError, Result};
@@ -86,9 +86,10 @@ impl ZtnaMesh {
     }
 
     pub fn add_interface(&self, iface: WireGuardInterface) -> Result<()> {
-        let mut interfaces = self.interfaces.lock().map_err(|e| {
-            ArgusError::Internal(format!("lock error: {}", e))
-        })?;
+        let mut interfaces = self
+            .interfaces
+            .lock()
+            .map_err(|e| ArgusError::Internal(format!("lock error: {}", e)))?;
 
         if interfaces.contains_key(&iface.name) {
             return Err(ArgusError::Validation(format!(
@@ -110,17 +111,19 @@ impl ZtnaMesh {
     }
 
     pub fn generate_wg_config(&self, iface_name: &str) -> Result<String> {
-        let interfaces = self.interfaces.lock().map_err(|e| {
-            ArgusError::Internal(format!("lock error: {}", e))
-        })?;
+        let interfaces = self
+            .interfaces
+            .lock()
+            .map_err(|e| ArgusError::Internal(format!("lock error: {}", e)))?;
 
-        let iface = interfaces.get(iface_name).ok_or_else(|| {
-            ArgusError::NotFound(format!("interface {} not found", iface_name))
-        })?;
+        let iface = interfaces
+            .get(iface_name)
+            .ok_or_else(|| ArgusError::NotFound(format!("interface {} not found", iface_name)))?;
 
-        let peers = self.peers.lock().map_err(|e| {
-            ArgusError::Internal(format!("lock error: {}", e))
-        })?;
+        let peers = self
+            .peers
+            .lock()
+            .map_err(|e| ArgusError::Internal(format!("lock error: {}", e)))?;
 
         let mut config = String::new();
 
@@ -186,17 +189,19 @@ impl ZtnaMesh {
     }
 
     pub fn add_peer(&self, peer: ZtnaPeer) -> Result<()> {
-        let mut peers = self.peers.lock().map_err(|e| {
-            ArgusError::Internal(format!("lock error: {}", e))
-        })?;
+        let mut peers = self
+            .peers
+            .lock()
+            .map_err(|e| ArgusError::Internal(format!("lock error: {}", e)))?;
         peers.insert(peer.id, peer);
         Ok(())
     }
 
     pub fn remove_peer(&self, peer_id: Uuid) -> Result<()> {
-        let mut peers = self.peers.lock().map_err(|e| {
-            ArgusError::Internal(format!("lock error: {}", e))
-        })?;
+        let mut peers = self
+            .peers
+            .lock()
+            .map_err(|e| ArgusError::Internal(format!("lock error: {}", e)))?;
 
         peers.remove(&peer_id);
         Ok(())

@@ -1,4 +1,4 @@
 #![no_std]
 
-pub mod xdp;
 pub mod maps;
+pub mod xdp;

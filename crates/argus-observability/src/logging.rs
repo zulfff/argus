@@ -62,11 +62,7 @@ impl LokiClient {
         let _ = self.client.post(&self.url).json(&request).send().await;
     }
 
-    pub async fn push_event(
-        &self,
-        event_type: &str,
-        data: &str,
-    ) {
+    pub async fn push_event(&self, event_type: &str, data: &str) {
         let mut labels = HashMap::new();
         labels.insert("event_type".into(), event_type.to_string());
         self.push_log("info", "event", data, labels).await;
@@ -84,10 +80,7 @@ mod tests {
                 ("job".into(), "argus".into()),
                 ("level".into(), "info".into()),
             ]),
-            values: vec![(
-                "1234567890000000".into(),
-                "test log message".into(),
-            )],
+            values: vec![("1234567890000000".into(), "test log message".into())],
         };
 
         let json = serde_json::to_string(&stream).unwrap();

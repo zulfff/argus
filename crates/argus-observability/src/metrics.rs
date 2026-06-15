@@ -1,6 +1,4 @@
-use prometheus::{
-    register_int_counter_vec, register_int_gauge_vec, IntCounterVec, IntGaugeVec,
-};
+use prometheus::{register_int_counter_vec, register_int_gauge_vec, IntCounterVec, IntGaugeVec};
 
 pub struct ArgusMetrics {
     pub packets_allowed: IntCounterVec,

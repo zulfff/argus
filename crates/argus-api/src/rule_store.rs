@@ -3,8 +3,8 @@ use std::sync::Mutex;
 
 use argus_common::error::{ArgusError, Result};
 use argus_common::types::{CidrRule, Direction};
-use async_trait::async_trait;
 use argus_core::rule_engine::RuleStore;
+use async_trait::async_trait;
 
 pub struct InMemoryRuleStore {
     rules: Mutex<HashMap<uuid::Uuid, CidrRule>>,
@@ -21,14 +21,20 @@ impl InMemoryRuleStore {
 #[async_trait]
 impl RuleStore for InMemoryRuleStore {
     async fn list_rules(&self) -> Result<Vec<CidrRule>> {
-        let rules = self.rules.lock().map_err(|e| ArgusError::Internal(e.to_string()))?;
+        let rules = self
+            .rules
+            .lock()
+            .map_err(|e| ArgusError::Internal(e.to_string()))?;
         let mut list: Vec<CidrRule> = rules.values().cloned().collect();
         list.sort_by_key(|r| r.priority);
         Ok(list)
     }
 
     async fn get_rule(&self, id: &uuid::Uuid) -> Result<CidrRule> {
-        let rules = self.rules.lock().map_err(|e| ArgusError::Internal(e.to_string()))?;
+        let rules = self
+            .rules
+            .lock()
+            .map_err(|e| ArgusError::Internal(e.to_string()))?;
         rules
             .get(id)
             .cloned()
@@ -36,13 +42,19 @@ impl RuleStore for InMemoryRuleStore {
     }
 
     async fn create_rule(&self, rule: CidrRule) -> Result<CidrRule> {
-        let mut rules = self.rules.lock().map_err(|e| ArgusError::Internal(e.to_string()))?;
+        let mut rules = self
+            .rules
+            .lock()
+            .map_err(|e| ArgusError::Internal(e.to_string()))?;
         rules.insert(rule.id, rule.clone());
         Ok(rule)
     }
 
     async fn update_rule(&self, rule: CidrRule) -> Result<CidrRule> {
-        let mut rules = self.rules.lock().map_err(|e| ArgusError::Internal(e.to_string()))?;
+        let mut rules = self
+            .rules
+            .lock()
+            .map_err(|e| ArgusError::Internal(e.to_string()))?;
         if !rules.contains_key(&rule.id) {
             return Err(ArgusError::NotFound(format!("rule {} not found", rule.id)));
         }
@@ -51,7 +63,10 @@ impl RuleStore for InMemoryRuleStore {
     }
 
     async fn delete_rule(&self, id: &uuid::Uuid) -> Result<()> {
-        let mut rules = self.rules.lock().map_err(|e| ArgusError::Internal(e.to_string()))?;
+        let mut rules = self
+            .rules
+            .lock()
+            .map_err(|e| ArgusError::Internal(e.to_string()))?;
         rules
             .remove(id)
             .map(|_| ())
@@ -59,7 +74,10 @@ impl RuleStore for InMemoryRuleStore {
     }
 
     async fn rules_by_direction(&self, direction: Direction) -> Result<Vec<CidrRule>> {
-        let rules = self.rules.lock().map_err(|e| ArgusError::Internal(e.to_string()))?;
+        let rules = self
+            .rules
+            .lock()
+            .map_err(|e| ArgusError::Internal(e.to_string()))?;
         let mut list: Vec<CidrRule> = rules
             .values()
             .filter(|r| r.direction == direction)

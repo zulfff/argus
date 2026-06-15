@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
-use argus_common::types::{Action, CidrRule, Direction};
 use crate::AppState;
+use argus_common::types::{Action, CidrRule, Direction};
 
 #[derive(Serialize)]
 pub struct RuleResponse {
@@ -56,10 +56,13 @@ impl From<CidrRule> for RuleResponse {
     }
 }
 
-pub async fn list_rules(
-    State(state): State<Arc<AppState>>,
-) -> Json<Vec<RuleResponse>> {
-    let rules = state.rule_engine.store().list_rules().await.unwrap_or_default();
+pub async fn list_rules(State(state): State<Arc<AppState>>) -> Json<Vec<RuleResponse>> {
+    let rules = state
+        .rule_engine
+        .store()
+        .list_rules()
+        .await
+        .unwrap_or_default();
     Json(rules.into_iter().map(RuleResponse::from).collect())
 }
 
@@ -161,7 +164,8 @@ pub async fn create_rule(
     validate_create_request(&req).map_err(|e| Json(serde_json::json!({"error": e})))?;
 
     let action = parse_action(&req.action).map_err(|e| Json(serde_json::json!({"error": e})))?;
-    let direction = parse_direction(&req.direction).map_err(|e| Json(serde_json::json!({"error": e})))?;
+    let direction =
+        parse_direction(&req.direction).map_err(|e| Json(serde_json::json!({"error": e})))?;
 
     let now = chrono::Utc::now();
     let rule = CidrRule {
@@ -181,7 +185,11 @@ pub async fn create_rule(
         updated_at: now,
     };
 
-    let created = state.rule_engine.store().create_rule(rule).await
+    let created = state
+        .rule_engine
+        .store()
+        .create_rule(rule)
+        .await
         .map_err(|e| Json(serde_json::json!({"error": e.to_string()})))?;
 
     Ok(Json(RuleResponse::from(created)))
@@ -192,11 +200,16 @@ pub async fn update_rule(
     Path(id): Path<Uuid>,
     Json(req): Json<CreateRuleRequest>,
 ) -> Result<Json<RuleResponse>, Json<serde_json::Value>> {
-    let existing = state.rule_engine.store().get_rule(&id).await
+    let existing = state
+        .rule_engine
+        .store()
+        .get_rule(&id)
+        .await
         .map_err(|e| Json(serde_json::json!({"error": e.to_string()})))?;
 
     let action = parse_action(&req.action).map_err(|e| Json(serde_json::json!({"error": e})))?;
-    let direction = parse_direction(&req.direction).map_err(|e| Json(serde_json::json!({"error": e})))?;
+    let direction =
+        parse_direction(&req.direction).map_err(|e| Json(serde_json::json!({"error": e})))?;
 
     let updated = CidrRule {
         id: existing.id,
@@ -215,7 +228,11 @@ pub async fn update_rule(
         updated_at: chrono::Utc::now(),
     };
 
-    let rule = state.rule_engine.store().update_rule(updated).await
+    let rule = state
+        .rule_engine
+        .store()
+        .update_rule(updated)
+        .await
         .map_err(|e| Json(serde_json::json!({"error": e.to_string()})))?;
 
     Ok(Json(RuleResponse::from(rule)))
@@ -225,7 +242,11 @@ pub async fn delete_rule(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, Json<serde_json::Value>> {
-    state.rule_engine.store().delete_rule(&id).await
+    state
+        .rule_engine
+        .store()
+        .delete_rule(&id)
+        .await
         .map_err(|e| Json(serde_json::json!({"error": e.to_string()})))?;
 
     Ok(Json(serde_json::json!({"deleted": id.to_string()})))
@@ -236,11 +257,14 @@ fn parse_action(s: &str) -> Result<Action, String> {
         "allow" => Ok(Action::Allow),
         "deny" => Ok(Action::Deny),
         s if s.starts_with("rate-limit:") => {
-            let pps = s.trim_start_matches("rate-limit:")
+            let pps = s
+                .trim_start_matches("rate-limit:")
                 .trim_end_matches("pps")
                 .parse::<u64>()
                 .map_err(|_| "invalid rate-limit value".to_string())?;
-            Ok(Action::RateLimit { packets_per_second: pps })
+            Ok(Action::RateLimit {
+                packets_per_second: pps,
+            })
         }
         _ => Err(format!("unknown action: {}", s)),
     }
