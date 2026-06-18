@@ -1,21 +1,30 @@
 FROM rust:1-slim-bookworm AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential pkg-config libssl-dev clang llvm libbpf-dev \
+    build-essential pkg-config libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
+
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
-COPY crates/argus-common crates/argus-common
-COPY crates/argus-core crates/argus-core
-COPY crates/argus-api crates/argus-api
-COPY crates/argus-observability crates/argus-observability
-RUN cargo build --release -p argus-api
+COPY crates/ crates/
+RUN cargo build --release --workspace --exclude argus-ebpf && \
+    cp target/release/argus-api /argus-api && \
+    cp target/release/argus-cli /argus-cli
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates wget && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/argus-api /usr/local/bin/argus-api
-RUN addgroup -S argus && adduser -S argus -G argus
-RUN mkdir -p /var/lib/argus && chown -R argus:argus /var/lib/argus
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates wget openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /argus-api /usr/local/bin/argus-api
+COPY --from=builder /argus-cli /usr/local/bin/argus-cli
+COPY deploy/docker/entrypoint.sh /entrypoint.sh
+
+RUN addgroup -S argus && adduser -S argus -G argus && \
+    mkdir -p /var/lib/argus && chown -R argus:argus /var/lib/argus && \
+    chmod +x /entrypoint.sh
+
 EXPOSE 8443
-HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://localhost:8443/health || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
+  CMD wget -qO- http://localhost:8443/health || exit 1
 USER argus
-ENTRYPOINT ["/usr/local/bin/argus-api"]
+ENTRYPOINT ["/entrypoint.sh"]
