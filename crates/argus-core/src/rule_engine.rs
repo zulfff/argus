@@ -13,6 +13,7 @@ pub trait RuleStore: Send + Sync {
     async fn update_rule(&self, rule: CidrRule) -> Result<CidrRule>;
     async fn delete_rule(&self, id: &uuid::Uuid) -> Result<()>;
     async fn rules_by_direction(&self, direction: Direction) -> Result<Vec<CidrRule>>;
+    async fn clear_rules(&self) -> Result<()>;
 }
 
 pub struct RuleEngine {
@@ -193,6 +194,9 @@ mod tests {
         }
         async fn rules_by_direction(&self, _direction: Direction) -> Result<Vec<CidrRule>> {
             Ok(vec![])
+        }
+        async fn clear_rules(&self) -> Result<()> {
+            Ok(())
         }
     }
 

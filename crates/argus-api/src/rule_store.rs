@@ -86,4 +86,13 @@ impl RuleStore for InMemoryRuleStore {
         list.sort_by_key(|r| r.priority);
         Ok(list)
     }
+
+    async fn clear_rules(&self) -> Result<()> {
+        let mut rules = self
+            .rules
+            .lock()
+            .map_err(|e| ArgusError::Internal(e.to_string()))?;
+        rules.clear();
+        Ok(())
+    }
 }

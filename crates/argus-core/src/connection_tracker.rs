@@ -45,20 +45,23 @@ impl ConnectionTracker {
             if conns.len() >= self.max_entries {
                 self.evict_lru(&mut conns);
             }
-            conns.insert(key.clone(), ConnectionEntry {
-                src_ip: key.src_ip,
-                dst_ip: key.dst_ip,
-                src_port: key.src_port,
-                dst_port: key.dst_port,
-                protocol: key.protocol,
-                state: ConnectionState::New,
-                created_at: now,
-                last_seen: now,
-                packets_in: 0,
-                packets_out: 0,
-                bytes_in: 0,
-                bytes_out: 0,
-            });
+            conns.insert(
+                key.clone(),
+                ConnectionEntry {
+                    src_ip: key.src_ip,
+                    dst_ip: key.dst_ip,
+                    src_port: key.src_port,
+                    dst_port: key.dst_port,
+                    protocol: key.protocol,
+                    state: ConnectionState::New,
+                    created_at: now,
+                    last_seen: now,
+                    packets_in: 0,
+                    packets_out: 0,
+                    bytes_in: 0,
+                    bytes_out: 0,
+                },
+            );
         }
     }
 

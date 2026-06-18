@@ -1,11 +1,12 @@
 use axum::{
     extract::{Path, State},
-    Json,
+    Extension, Json,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::auth::Claims;
 use crate::AppState;
 use argus_common::types::{Action, CidrRule, Direction};
 
@@ -56,18 +57,23 @@ impl From<CidrRule> for RuleResponse {
     }
 }
 
-pub async fn list_rules(State(state): State<Arc<AppState>>) -> Json<Vec<RuleResponse>> {
+pub async fn list_rules(
+    State(state): State<Arc<AppState>>,
+    Extension(_claims): Extension<Claims>,
+) -> Json<Vec<RuleResponse>> {
     let rules = state
         .rule_engine
         .store()
         .list_rules()
-        .await.unwrap_or_default();
+        .await
+        .unwrap_or_default();
     Json(rules.into_iter().map(RuleResponse::from).collect())
 }
 
 pub async fn get_rule(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
+    Extension(_claims): Extension<Claims>,
 ) -> Result<Json<RuleResponse>, Json<serde_json::Value>> {
     match state.rule_engine.store().get_rule(&id).await {
         Ok(rule) => Ok(Json(RuleResponse::from(rule))),
@@ -157,8 +163,15 @@ fn validate_cidr(cidr: &str) -> Result<(), String> {
 
 pub async fn create_rule(
     State(state): State<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
     Json(req): Json<CreateRuleRequest>,
 ) -> Result<Json<RuleResponse>, Json<serde_json::Value>> {
+    if !claims.role.can_write() {
+        return Err(Json(
+            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
+        ));
+    }
+
     validate_create_request(&req).map_err(|e| Json(serde_json::json!({"error": e})))?;
 
     let action = parse_action(&req.action).map_err(|e| Json(serde_json::json!({"error": e})))?;
@@ -196,8 +209,15 @@ pub async fn create_rule(
 pub async fn update_rule(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
+    Extension(claims): Extension<Claims>,
     Json(req): Json<CreateRuleRequest>,
 ) -> Result<Json<RuleResponse>, Json<serde_json::Value>> {
+    if !claims.role.can_write() {
+        return Err(Json(
+            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
+        ));
+    }
+
     validate_create_request(&req).map_err(|e| Json(serde_json::json!({"error": e})))?;
 
     let existing = state
@@ -241,12 +261,20 @@ pub async fn update_rule(
 pub async fn delete_rule(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
+    Extension(claims): Extension<Claims>,
 ) -> Result<Json<serde_json::Value>, Json<serde_json::Value>> {
+    if !claims.role.can_delete() {
+        return Err(Json(
+            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
+        ));
+    }
+
     state
         .rule_engine
         .store()
         .delete_rule(&id)
-        .await.unwrap_or_default();
+        .await
+        .unwrap_or_default();
 
     Ok(Json(serde_json::json!({"deleted": id.to_string()})))
 }

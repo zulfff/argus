@@ -78,7 +78,9 @@ pub struct VyosDiffResult {
 impl VyosClient {
     pub fn new(address: String, port: Option<u16>) -> Self {
         let hostname = address.split(':').next().unwrap_or(&address).to_string();
-        let parsed_port = address.rsplit_once(':').and_then(|(_, p)| p.parse::<u16>().ok());
+        let parsed_port = address
+            .rsplit_once(':')
+            .and_then(|(_, p)| p.parse::<u16>().ok());
         let effective_port = port.or(parsed_port).unwrap_or(DEFAULT_PORT);
 
         let client = reqwest::Client::builder()
@@ -100,7 +102,12 @@ impl VyosClient {
     }
 
     pub fn device_url(&self) -> String {
-        let host = self.device.address.split(':').next().unwrap_or(&self.device.address);
+        let host = self
+            .device
+            .address
+            .split(':')
+            .next()
+            .unwrap_or(&self.device.address);
         format!("https://{}:{}", host, self.device.port)
     }
 

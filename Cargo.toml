@@ -43,5 +43,7 @@ tower-governor = { version = "0.4", package = "tower_governor" }
 tower = { version = "0.5", features = ["util"] }
 async-trait = "0.1"
 futures = "0.3"
+ipnetwork = "0.20"
+base64 = "0.22"
 proptest = "1"
 criterion = { version = "0.5", features = ["html_reports"] }

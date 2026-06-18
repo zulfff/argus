@@ -17,6 +17,9 @@ futures.workspace = true
 reqwest.workspace = true
 sha2 = "0.10"
 hex = "0.4"
+serde_yaml = "0.9"
+csv = "1.3"
+ipnetwork.workspace = true
 wasmtime = { version = "28", optional = true }
 wasmparser = { version = "0.218", optional = true }
 

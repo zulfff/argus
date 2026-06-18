@@ -2,11 +2,19 @@
   import '../app.css';
   import { page } from '$app/stores';
   import { authToken, apiFetch } from '$lib/stores/auth';
+  import { theme } from '$lib/stores/theme';
 
   let { children } = $props();
 
-  let uptime = $state('--');
   let apiStatus = $state(true);
+
+  function toggleTheme() {
+    $theme = $theme === 'dark' ? 'light' : 'dark';
+  }
+
+  $effect(() => {
+    document.documentElement.setAttribute('data-theme', $theme);
+  });
 
   $effect(() => {
     const check = async () => {
@@ -45,11 +53,17 @@
     <a href="/dashboard"   class="nav-link" class:active={$page.url.pathname.startsWith('/dashboard')}>   ⚡ DASH</a>
     <a href="/rules"       class="nav-link" class:active={$page.url.pathname.startsWith('/rules')}>       ⚙ RULES</a>
     <a href="/connections" class="nav-link" class:active={$page.url.pathname.startsWith('/connections')}> ⇄ CONN</a>
+    <a href="/alerts"      class="nav-link" class:active={$page.url.pathname.startsWith('/alerts')}>      🔔 ALERTS</a>
+    <a href="/audit"       class="nav-link" class:active={$page.url.pathname.startsWith('/audit')}>       📋 AUDIT</a>
+    <a href="/docs"        class="nav-link" class:active={$page.url.pathname.startsWith('/docs')}>        📖 DOCS</a>
     {#if $authToken}
       <a href="/login" class="nav-link" onclick={() => $authToken = null}>⏻ LOGOUT</a>
     {:else}
       <a href="/login" class="nav-link">🔐 LOGIN</a>
     {/if}
+    <button class="theme-toggle" onclick={toggleTheme} title="Toggle theme">
+      {$theme === 'dark' ? '☀' : '🌙'}
+    </button>
   </nav>
 </header>
 

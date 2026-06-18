@@ -72,7 +72,7 @@ impl std::fmt::Display for Role {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     pub id: Uuid,
     pub username: String,
@@ -165,6 +165,71 @@ impl UserStore {
 
     pub async fn delete_user(&self, username: &str) -> bool {
         self.users.lock().await.remove(username).is_some()
+    }
+
+    pub async fn update_user(
+        &self,
+        username: &str,
+        password: Option<&str>,
+        role: Option<Role>,
+    ) -> Result<User, String> {
+        let mut users = self.users.lock().await;
+        let user = users
+            .get_mut(username)
+            .ok_or_else(|| format!("user '{}' not found", username))?;
+
+        if let Some(pass) = password {
+            let salt = SaltString::generate(&mut OsRng);
+            let argon2 = Argon2::default();
+            user.password_hash = argon2
+                .hash_password(pass.as_bytes(), &salt)
+                .map_err(|e| format!("password hash error: {}", e))?
+                .to_string();
+        }
+
+        if let Some(role) = role {
+            user.role = role;
+        }
+
+        Ok(user.clone())
+    }
+
+    pub async fn disable_user(&self, username: &str) -> Result<User, String> {
+        let mut users = self.users.lock().await;
+        let user = users
+            .get_mut(username)
+            .ok_or_else(|| format!("user '{}' not found", username))?;
+        user.enabled = false;
+        Ok(user.clone())
+    }
+
+    pub async fn enable_user(&self, username: &str) -> Result<User, String> {
+        let mut users = self.users.lock().await;
+        let user = users
+            .get_mut(username)
+            .ok_or_else(|| format!("user '{}' not found", username))?;
+        user.enabled = true;
+        Ok(user.clone())
+    }
+
+    pub async fn change_password(&self, username: &str, new_password: &str) -> Result<(), String> {
+        let mut users = self.users.lock().await;
+        let user = users
+            .get_mut(username)
+            .ok_or_else(|| format!("user '{}' not found", username))?;
+
+        let salt = SaltString::generate(&mut OsRng);
+        let argon2 = Argon2::default();
+        user.password_hash = argon2
+            .hash_password(new_password.as_bytes(), &salt)
+            .map_err(|e| format!("password hash error: {}", e))?
+            .to_string();
+
+        Ok(())
+    }
+
+    pub async fn clear_users(&self) {
+        self.users.lock().await.clear();
     }
 }
 

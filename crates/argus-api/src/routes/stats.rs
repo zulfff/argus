@@ -1,7 +1,8 @@
-use axum::{extract::State, Json};
+use axum::{extract::State, Extension, Json};
 use serde::Serialize;
 use std::sync::Arc;
 
+use crate::auth::Claims;
 use crate::AppState;
 
 #[derive(Serialize)]
@@ -13,7 +14,10 @@ pub struct StatsResponse {
     pub rate_limit_buckets: usize,
 }
 
-pub async fn get_stats(State(state): State<Arc<AppState>>) -> Json<StatsResponse> {
+pub async fn get_stats(
+    State(state): State<Arc<AppState>>,
+    Extension(_claims): Extension<Claims>,
+) -> Json<StatsResponse> {
     Json(StatsResponse {
         packets_allowed: 0,
         packets_dropped: 0,
