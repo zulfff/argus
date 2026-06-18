@@ -1,6 +1,8 @@
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
+use tempfile::NamedTempFile;
 use tokio::process::Command;
 use tracing::{debug, error, instrument};
 
@@ -113,9 +115,16 @@ impl AnsibleRunner {
 
         let start = std::time::Instant::now();
         let mut cmd = Command::new(&self.ansible_bin);
-
         cmd.arg(&playbook_path);
-        cmd.arg("--extra-vars").arg(job.extra_vars.to_string());
+
+        let extra_vars_json = job.extra_vars.to_string();
+        let mut tmpfile = NamedTempFile::with_prefix("argus-extra-vars-")
+            .map_err(|e| ArgusError::External(format!("failed to create temp file: {}", e)))?;
+        tmpfile
+            .write_all(extra_vars_json.as_bytes())
+            .map_err(|e| ArgusError::External(format!("failed to write extra_vars: {}", e)))?;
+        cmd.arg("--extra-vars")
+            .arg(format!("@{}", tmpfile.path().display()));
 
         if let Some(ref inventory) = job.inventory.as_ref().or(self.default_inventory.as_ref()) {
             cmd.arg("--inventory").arg(inventory);

@@ -6,7 +6,8 @@ services:
     environment:
       POSTGRES_DB: argus
       POSTGRES_USER: argus
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-argus-secret}
+      # These MUST be set explicitly in your environment
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
@@ -34,9 +35,9 @@ services:
     ports:
       - "8443:8443"
     environment:
-      DATABASE_URL: postgres://argus:${DB_PASSWORD:-argus-secret}@postgres:5432/argus
+      DATABASE_URL: postgres://argus:${DB_PASSWORD}@postgres:5432/argus
       REDIS_URL: redis://redis:6379
-      ARGUS_JWT_SECRET: ${JWT_SECRET:-change-me-in-production-32bytes}
+      ARGUS_JWT_SECRET: ${JWT_SECRET}       # MUST be set explicitly
       RUST_LOG: argus=info
     depends_on:
       postgres:
@@ -49,7 +50,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      # MUST be set explicitly
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
     volumes:
       - ../grafana/argus-dashboard.json:/etc/grafana/provisioning/dashboards/argus.json
     depends_on:

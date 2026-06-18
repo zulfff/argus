@@ -379,7 +379,16 @@ async fn main() {
 
 async fn try_main() -> anyhow::Result<()> {
     info!("Initializing engines...");
-    let store = Arc::new(rule_store::InMemoryRuleStore::new());
+
+    let store: Arc<dyn argus_core::rule_engine::RuleStore> =
+        if let Ok(db_url) = std::env::var("DATABASE_URL") {
+            info!("DATABASE_URL set, using PostgresRuleStore");
+            Arc::new(db_rule_store::PostgresRuleStore::new(&db_url).await?)
+        } else {
+            info!("No DATABASE_URL set, using InMemoryRuleStore");
+            Arc::new(rule_store::InMemoryRuleStore::new())
+        };
+
     let rule_engine = RuleEngine::new(store);
     let connection_tracker = ConnectionTracker::new(65536, 30);
     let rate_limiter = RateLimiter::new(100.0, 10.0);
@@ -545,4 +554,6 @@ async fn shutdown_signal() {
     }
 
     info!("Signal received, starting graceful shutdown");
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    info!("Shutdown complete");
 }

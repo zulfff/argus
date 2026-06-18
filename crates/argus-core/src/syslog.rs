@@ -106,7 +106,7 @@ impl SyslogForwarder {
                 }
                 SyslogProtocol::Udp => {
                     let addr = format!("{}:{}", config.server, config.port);
-                    if let Ok(socket) = tokio::net::UdpSocket::bind("0.0.0.0:0").await {
+                    if let Ok(socket) = tokio::net::UdpSocket::bind("127.0.0.1:0").await {
                         let _ = socket.send_to(syslog_msg.as_bytes(), &addr).await;
                     }
                 }

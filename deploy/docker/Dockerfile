@@ -11,9 +11,11 @@ COPY crates/argus-observability crates/argus-observability
 RUN cargo build --release -p argus-api
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates wget && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/argus-api /usr/local/bin/argus-api
+RUN addgroup -S argus && adduser -S argus -G argus
+RUN mkdir -p /var/lib/argus && chown -R argus:argus /var/lib/argus
 EXPOSE 8443
-HEALTHCHECK --interval=30s --timeout=3s CMD curl -f http://localhost:8443/health || exit 1
-USER nobody
+HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://localhost:8443/health || exit 1
+USER argus
 ENTRYPOINT ["/usr/local/bin/argus-api"]

@@ -2,7 +2,7 @@ use axum::{body::Body, extract::State, http::Request, middleware::Next, response
 use axum_extra::headers::{authorization::Bearer, Authorization, HeaderMapExt};
 use std::sync::Arc;
 
-use crate::auth::{AuthError, JwtAuth};
+use crate::auth::AuthError;
 use crate::AppState;
 
 pub async fn auth_middleware(
@@ -15,8 +15,9 @@ pub async fn auth_middleware(
         .typed_get::<Authorization<Bearer>>()
         .ok_or(AuthError::MissingToken)?;
 
-    let jwt = JwtAuth::new(&state.auth_config.jwt_secret);
-    let claims = jwt
+    let claims = state
+        .auth_config
+        .jwt_auth
         .validate_token(authorization.token())
         .map_err(AuthError::InvalidToken)?;
 

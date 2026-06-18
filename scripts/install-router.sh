@@ -190,7 +190,7 @@ ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/opt/argus/data /var/log/argus
 PrivateTmp=yes
-MemoryMax=256M
+MemoryMax=1G
 CPUQuota=150%
 LimitNOFILE=65536
 

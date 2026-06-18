@@ -10,6 +10,7 @@ const DEFAULT_PORT: u16 = 443;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VyosConfig {
     pub firewall: VyosFirewallConfig,
+    pub api_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,6 +37,8 @@ pub struct VyosDeviceInfo {
 pub struct VyosClient {
     device: VyosDeviceInfo,
     client: reqwest::Client,
+    pub accept_invalid_certs: bool,
+    api_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,11 +86,13 @@ impl VyosClient {
             .and_then(|(_, p)| p.parse::<u16>().ok());
         let effective_port = port.or(parsed_port).unwrap_or(DEFAULT_PORT);
 
-        let client = reqwest::Client::builder()
+        let client_builder = reqwest::Client::builder()
             .timeout(Duration::from_secs(HTTP_TIMEOUT_SECS))
             .connect_timeout(Duration::from_secs(10))
             .tls_built_in_root_certs(true)
-            .user_agent("argus-orchestrator/0.1.0")
+            .user_agent("argus-orchestrator/0.1.0");
+
+        let client = client_builder
             .build()
             .expect("failed to build reqwest client");
 
@@ -98,7 +103,28 @@ impl VyosClient {
                 port: effective_port,
             },
             client,
+            accept_invalid_certs: false,
+            api_key: None,
         }
+    }
+
+    pub fn set_accept_invalid_certs(&mut self, value: bool) {
+        self.accept_invalid_certs = value;
+    }
+
+    pub fn set_api_key(&mut self, key: String) {
+        self.api_key = Some(key);
+    }
+
+    fn api_request(&self, url: &str) -> reqwest::RequestBuilder {
+        let mut req = self
+            .client
+            .post(url)
+            .header("Content-Type", "application/json");
+        if let Some(key) = &self.api_key {
+            req = req.header("X-API-Key", key);
+        }
+        req
     }
 
     pub fn device_url(&self) -> String {
@@ -121,10 +147,8 @@ impl VyosClient {
         };
 
         let response = self
-            .client
-            .post(&url)
+            .api_request(&url)
             .json(&request)
-            .header("Content-Type", "application/json")
             .send()
             .await
             .map_err(|e| ArgusError::Network(format!("VyOS unreachable: {}", e)))?;
@@ -165,10 +189,8 @@ impl VyosClient {
         };
 
         let response = self
-            .client
-            .post(&url)
+            .api_request(&url)
             .json(&request)
-            .header("Content-Type", "application/json")
             .send()
             .await
             .map_err(|e| ArgusError::Network(format!("VyOS config retrieve failed: {}", e)))?;
@@ -209,10 +231,8 @@ impl VyosClient {
         };
 
         let response = self
-            .client
-            .post(&url)
+            .api_request(&url)
             .json(&request)
-            .header("Content-Type", "application/json")
             .send()
             .await
             .map_err(|e| ArgusError::Network(format!("VyOS config load failed: {}", e)))?;
@@ -260,10 +280,8 @@ impl VyosClient {
         };
 
         let response = self
-            .client
-            .post(&url)
+            .api_request(&url)
             .json(&request)
-            .header("Content-Type", "application/json")
             .send()
             .await
             .map_err(|e| ArgusError::Network(format!("VyOS compare failed: {}", e)))?;
@@ -291,10 +309,8 @@ impl VyosClient {
         });
 
         let response = self
-            .client
-            .post(&url)
+            .api_request(&url)
             .json(&request)
-            .header("Content-Type", "application/json")
             .send()
             .await
             .map_err(|e| ArgusError::Network(format!("VyOS commit failed: {}", e)))?;
@@ -313,10 +329,8 @@ impl VyosClient {
         });
 
         let response = self
-            .client
-            .post(&url)
+            .api_request(&url)
             .json(&request)
-            .header("Content-Type", "application/json")
             .send()
             .await
             .map_err(|e| ArgusError::Network(format!("VyOS commit-confirm failed: {}", e)))?;
@@ -334,10 +348,8 @@ impl VyosClient {
         };
 
         let response = self
-            .client
-            .post(&url)
+            .api_request(&url)
             .json(&request)
-            .header("Content-Type", "application/json")
             .send()
             .await
             .map_err(|e| ArgusError::Network(format!("VyOS discard failed: {}", e)))?;
@@ -355,10 +367,8 @@ impl VyosClient {
         };
 
         let response = self
-            .client
-            .post(&url)
+            .api_request(&url)
             .json(&request)
-            .header("Content-Type", "application/json")
             .send()
             .await
             .map_err(|e| ArgusError::Network(format!("VyOS save failed: {}", e)))?;
@@ -377,10 +387,8 @@ impl VyosClient {
         });
 
         let response = self
-            .client
-            .post(&url)
+            .api_request(&url)
             .json(&request)
-            .header("Content-Type", "application/json")
             .send()
             .await
             .map_err(|e| ArgusError::Network(format!("VyOS rollback failed: {}", e)))?;
@@ -416,6 +424,26 @@ impl VyosClient {
 
     #[instrument(skip(self))]
     pub async fn run_op_command(&self, command: &str) -> Result<String> {
+        let allowlist = [
+            "show version",
+            "show configuration",
+            "show firewall",
+            "show interfaces",
+            "show ip route",
+            "show log",
+            "show system",
+            "show vpn",
+            "show nat",
+            "show dhcp",
+        ];
+
+        let trimmed = command.trim();
+        if !allowlist.contains(&trimmed) {
+            return Err(ArgusError::Validation(format!(
+                "command '{command}' is not in the allowlist"
+            )));
+        }
+
         let url = format!("{}/retrieve", self.device_url());
 
         let parts: Vec<&str> = command.split_whitespace().collect();
@@ -428,10 +456,8 @@ impl VyosClient {
         };
 
         let response = self
-            .client
-            .post(&url)
+            .api_request(&url)
             .json(&request)
-            .header("Content-Type", "application/json")
             .send()
             .await
             .map_err(|e| ArgusError::Network(format!("VyOS op command failed: {}", e)))?;

@@ -54,9 +54,13 @@ pub struct GitOpsEngine {
 
 impl GitOpsEngine {
     pub fn new(config: GitOpsConfig) -> Self {
+        let repo_path = PathBuf::from(
+            std::env::var("ARGUS_GITOPS_DIR")
+                .unwrap_or_else(|_| "/var/lib/argus/gitops-repo".into()),
+        );
         Self {
             config,
-            repo_path: PathBuf::from("/var/lib/argus/gitops-repo"),
+            repo_path,
             applied_commits: Vec::new(),
         }
     }
@@ -105,7 +109,10 @@ impl GitOpsEngine {
                 break;
             }
 
-            let files = self.get_changed_files(&commit).unwrap_or_default();
+            let files = self.get_changed_files(&commit).unwrap_or_else(|e| {
+                tracing::error!("Failed to get changed files for commit {}: {}", commit, e);
+                Vec::new()
+            });
             let timestamp = DateTime::parse_from_rfc3339(parts[3])
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(|_| Utc::now());
@@ -232,6 +239,9 @@ impl GitOpsEngine {
     }
 
     fn clone_repo(&self) -> Result<()> {
+        let sanitized = sanitize_url(&self.config.repo_url);
+        tracing::info!("Cloning repo from {}", sanitized);
+
         let output = StdCommand::new("git")
             .args([
                 "clone",
@@ -254,6 +264,9 @@ impl GitOpsEngine {
     }
 
     fn pull_repo(&self) -> Result<()> {
+        let sanitized = sanitize_url(&self.config.repo_url);
+        tracing::info!("Pulling repo from {}", sanitized);
+
         let output = StdCommand::new("git")
             .args(["pull", "--ff-only", "origin", &self.config.branch])
             .current_dir(&self.repo_path)
@@ -278,6 +291,17 @@ impl GitOpsEngine {
         let stdout = String::from_utf8_lossy(&output.stdout);
         Ok(stdout.lines().map(String::from).collect())
     }
+}
+
+fn sanitize_url(url: &str) -> String {
+    let mut s = url.to_string();
+    if let Some(at_pos) = s.find('@') {
+        if let Some(proto_end) = s.find("://") {
+            let prefix = &s[..=proto_end + 2];
+            s = format!("{}***@{}", prefix, &s[at_pos + 1..]);
+        }
+    }
+    s
 }
 
 #[cfg(test)]

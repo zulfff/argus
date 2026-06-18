@@ -12,7 +12,6 @@ ExecStart=/usr/local/bin/argus-api
 Restart=always
 RestartSec=5
 Environment=RUST_LOG=argus=info
-Environment=ARGUS_JWT_SECRET=%JWT_SECRET%
 EnvironmentFile=/etc/argus/env
 AmbientCapabilities=CAP_NET_ADMIN CAP_SYS_ADMIN
 NoNewPrivileges=yes
@@ -20,7 +19,7 @@ ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/sys/fs/bpf /opt/argus/data
 PrivateTmp=yes
-MemoryMax=512M
+MemoryMax=1G
 CPUQuota=200%
 
 [Install]

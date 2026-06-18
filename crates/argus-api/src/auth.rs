@@ -239,6 +239,7 @@ impl Default for UserStore {
     }
 }
 
+#[derive(Clone)]
 pub struct JwtAuth {
     encoding_key: EncodingKey,
     decoding_key: DecodingKey,
@@ -335,12 +336,27 @@ impl JwtAuth {
             jti: Uuid::new_v4().to_string(),
         };
 
+        let refresh_claims = Claims {
+            sub: claims.sub.clone(),
+            username: claims.username.clone(),
+            role: claims.role.clone(),
+            exp: now + REFRESH_TOKEN_EXPIRY_SECS,
+            iat: now,
+            nbf: now,
+            iss: "argus".into(),
+            aud: "argus-api".into(),
+            jti: Uuid::new_v4().to_string(),
+        };
+
         let access_token = encode(&Header::default(), &access_claims, &self.encoding_key)
             .map_err(|e| format!("token encode error: {}", e))?;
 
+        let new_refresh_token = encode(&Header::default(), &refresh_claims, &self.encoding_key)
+            .map_err(|e| format!("refresh token encode error: {}", e))?;
+
         Ok(TokenResponse {
             access_token,
-            refresh_token: refresh_token.to_string(),
+            refresh_token: new_refresh_token,
             token_type: "Bearer".into(),
             expires_in: ACCESS_TOKEN_EXPIRY_SECS,
             role: claims.role.to_string(),
@@ -406,13 +422,16 @@ impl IntoResponse for AuthError {
 #[derive(Clone)]
 pub struct AuthConfig {
     pub jwt_secret: Vec<u8>,
+    pub jwt_auth: JwtAuth,
     pub user_store: Arc<UserStore>,
 }
 
 impl AuthConfig {
     pub fn new(jwt_secret: Vec<u8>) -> Self {
+        let jwt_auth = JwtAuth::new(&jwt_secret);
         Self {
             jwt_secret,
+            jwt_auth,
             user_store: Arc::new(UserStore::new()),
         }
     }
