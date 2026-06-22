@@ -70,28 +70,35 @@ impl ClusterManager {
             last_heartbeat: Utc::now(),
             healthy: true,
         };
-        let mut nodes = self.nodes.lock().unwrap();
-        nodes.insert(id, node);
+        if let Ok(mut nodes) = self.nodes.lock() {
+            nodes.insert(id, node);
+        }
         id
     }
 
     pub fn list_nodes(&self) -> Vec<ClusterNode> {
-        let nodes = self.nodes.lock().unwrap();
-        let mut list: Vec<ClusterNode> = nodes.values().cloned().collect();
-        list.sort_by(|a, b| a.name.cmp(&b.name));
-        list
+        self.nodes.lock().ok().map_or(Vec::new(), |nodes| {
+            let mut list: Vec<ClusterNode> = nodes.values().cloned().collect();
+            list.sort_by(|a, b| a.name.cmp(&b.name));
+            list
+        })
     }
 
     pub fn remove_node(&self, id: &Uuid) -> bool {
         if *id == self.local_id {
             return false;
         }
-        let mut nodes = self.nodes.lock().unwrap();
-        nodes.remove(id).is_some()
+        self.nodes
+            .lock()
+            .ok()
+            .map(|mut n| n.remove(id).is_some())
+            .unwrap_or(false)
     }
 
     pub fn heartbeat(&self, node_id: &Uuid) -> bool {
-        let mut nodes = self.nodes.lock().unwrap();
+        let Ok(mut nodes) = self.nodes.lock() else {
+            return false;
+        };
         if let Some(node) = nodes.get_mut(node_id) {
             node.last_heartbeat = Utc::now();
             node.healthy = true;
@@ -102,7 +109,7 @@ impl ClusterManager {
     }
 
     pub fn elect_leader(&self) -> Option<Uuid> {
-        let mut nodes = self.nodes.lock().unwrap();
+        let mut nodes = self.nodes.lock().ok()?;
         let now = Utc::now();
         let timeout = chrono::Duration::seconds(self.heartbeat_interval_secs as i64 * 3);
 

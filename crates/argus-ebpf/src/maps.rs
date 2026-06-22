@@ -1,5 +1,3 @@
-#![no_std]
-
 use aya_ebpf::macros::map;
 use aya_ebpf::maps::{HashMap, PerCpuArray, PerfEventArray};
 

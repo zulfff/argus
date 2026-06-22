@@ -1,5 +1,3 @@
-#![no_std]
-
 use aya_ebpf::bindings::xdp_action;
 use aya_ebpf::macros::xdp;
 use aya_ebpf::programs::XdpContext;

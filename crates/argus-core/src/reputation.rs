@@ -29,7 +29,9 @@ impl ReputationManager {
     }
 
     pub fn adjust_score(&self, ip: IpAddr, delta: i32, reason: &str) {
-        let mut entries = self.entries.lock().unwrap();
+        let Ok(mut entries) = self.entries.lock() else {
+            return;
+        };
         let entry = entries.entry(ip).or_insert(IpReputation {
             ip,
             score: 0,
@@ -53,20 +55,22 @@ impl ReputationManager {
     }
 
     pub fn get_reputation(&self, ip: &IpAddr) -> Option<IpReputation> {
-        let entries = self.entries.lock().unwrap();
-        entries.get(ip).cloned()
+        self.entries.lock().ok()?.get(ip).cloned()
     }
 
     pub fn list_lowest(&self, count: usize) -> Vec<IpReputation> {
-        let entries = self.entries.lock().unwrap();
-        let mut list: Vec<IpReputation> = entries.values().cloned().collect();
-        list.sort_by_key(|e| e.score);
-        list.truncate(count);
-        list
+        self.entries.lock().ok().map_or(Vec::new(), |entries| {
+            let mut list: Vec<IpReputation> = entries.values().cloned().collect();
+            list.sort_by_key(|e| e.score);
+            list.truncate(count);
+            list
+        })
     }
 
     pub fn bulk_set_from_threat_intel(&self, ips: &[IpAddr], score: i32) {
-        let mut entries = self.entries.lock().unwrap();
+        let Ok(mut entries) = self.entries.lock() else {
+            return;
+        };
         for ip in ips {
             let entry = entries.entry(*ip).or_insert(IpReputation {
                 ip: *ip,
@@ -84,10 +88,15 @@ impl ReputationManager {
     }
 
     pub fn should_block(&self, ip: &IpAddr) -> bool {
-        let entries = self.entries.lock().unwrap();
-        entries
-            .get(ip)
-            .map(|e| e.score <= self.threshold_block)
+        self.entries
+            .lock()
+            .ok()
+            .map(|entries| {
+                entries
+                    .get(ip)
+                    .map(|e| e.score <= self.threshold_block)
+                    .unwrap_or(false)
+            })
             .unwrap_or(false)
     }
 }

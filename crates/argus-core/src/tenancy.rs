@@ -34,31 +34,36 @@ impl TenantManager {
             created_at: Utc::now(),
             enabled: true,
         };
-        let mut tenants = self.tenants.lock().unwrap();
-        tenants.insert(tenant.id, tenant.clone());
+        if let Ok(mut tenants) = self.tenants.lock() {
+            tenants.insert(tenant.id, tenant.clone());
+        }
         tenant
     }
 
     pub fn list_tenants(&self) -> Vec<Tenant> {
-        let tenants = self.tenants.lock().unwrap();
-        let mut list: Vec<Tenant> = tenants.values().cloned().collect();
-        list.sort_by(|a, b| a.name.cmp(&b.name));
-        list
+        self.tenants.lock().ok().map_or(Vec::new(), |tenants| {
+            let mut list: Vec<Tenant> = tenants.values().cloned().collect();
+            list.sort_by(|a, b| a.name.cmp(&b.name));
+            list
+        })
     }
 
     pub fn get_tenant(&self, id: &Uuid) -> Option<Tenant> {
-        let tenants = self.tenants.lock().unwrap();
-        tenants.get(id).cloned()
+        self.tenants.lock().ok()?.get(id).cloned()
     }
 
     pub fn delete_tenant(&self, id: &Uuid) -> bool {
-        let mut tenants = self.tenants.lock().unwrap();
-        tenants.remove(id).is_some()
+        self.tenants
+            .lock()
+            .ok()
+            .map(|mut t| t.remove(id).is_some())
+            .unwrap_or(false)
     }
 
     pub fn set_default_tenant_id(&self, id: Uuid) {
-        let mut default = self.default_tenant_id.lock().unwrap();
-        *default = Some(id);
+        if let Ok(mut default) = self.default_tenant_id.lock() {
+            *default = Some(id);
+        }
     }
 
     pub fn clear_tenants(&self) {
