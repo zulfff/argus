@@ -4,6 +4,7 @@ import Badge from '../components/Badge.jsx';
 import { PageHeader, SkeletonRows, EmptyState, LoadingError } from '../components/Shared.jsx';
 
 const actionGroup = (a) => a?.split('.')[0] || '';
+const colors = { login: 'var(--color-purple-400)', rule: 'var(--color-green-400)', block: 'var(--color-red-400)', backup: 'var(--color-yellow-400)', user: 'var(--color-green-400)' };
 
 export default function Audit() {
   const [entries, setEntries] = useState([]);
@@ -26,52 +27,53 @@ export default function Audit() {
 
   const verify = async () => { setVerifying(true); try { setVerifyResult(await api.audit.verify()); } catch (e) { setVerifyResult({ valid: false, error: e.message }); } finally { setVerifying(false); } };
 
-  const colors = { login: 'var(--purple)', rule: 'var(--cyan)', block: 'var(--red)', backup: 'var(--yellow)', user: 'var(--green)' };
+  const btnCls = "inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs rounded bg-[var(--color-bg-elevated)] text-[var(--color-text-sec)] border border-[var(--color-bg-border)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)] transition-all";
+  const primaryCls = "inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded bg-[var(--color-green-400)] text-black hover:bg-[var(--color-green-500)] hover:shadow-[0_0_16px_var(--color-green-glow)] transition-all";
 
   return (
-    <div className="fade-in">
+    <div>
       <PageHeader title="Audit Log" subtitle={`${entries.length} entries — hash-chained`}>
-        <a href="/api/v1/audit/export" className="btn">Export JSON</a>
-        <button className="btn btn-primary" onClick={verify} disabled={verifying}>{verifying ? '⏳ Verifying...' : '✓ Verify Integrity'}</button>
+        <a href="/api/v1/audit/export" className={btnCls}>Export</a>
+        <button className={primaryCls} onClick={verify} disabled={verifying}>{verifying ? '⏳ Verifying...' : '✓ Verify Integrity'}</button>
       </PageHeader>
 
       {verifyResult && (
-        <div className="card" style={{ marginBottom: 12, borderColor: verifyResult.valid ? 'var(--green)' : 'var(--red)', animation: 'fadeSlideIn 0.3s ease' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: verifyResult.valid ? 'var(--green)' : 'var(--red)', fontSize: 20 }}>{verifyResult.valid ? '✓' : '⚠'}</span>
+        <div className="bg-[var(--color-bg-panel)] border rounded p-3.5 mb-3 animate-fade" style={{ borderColor: verifyResult.valid ? 'var(--color-green-400)' : 'var(--color-red-400)' }}>
+          <div className="flex items-center gap-2">
+            <span style={{ color: verifyResult.valid ? 'var(--color-green-400)' : 'var(--color-red-400)' }} className="text-xl">{verifyResult.valid ? '✓' : '⚠'}</span>
             <div>
-              <div style={{ color: verifyResult.valid ? 'var(--green)' : 'var(--red)', fontWeight: 700, fontSize: 13 }}>{verifyResult.valid ? 'Hash chain intact' : `Integrity violation — ${verifyResult.tampered_count} entries tampered`}</div>
-              <div className="cell-dim" style={{ fontSize: 12 }}>{verifyResult.valid ? `All ${verifyResult.total_entries} entries verified` : `First broken at entry #${verifyResult.first_broken_at}`}</div>
+              <div style={{ color: verifyResult.valid ? 'var(--color-green-400)' : 'var(--color-red-400)' }} className="font-bold text-[13px]">{verifyResult.valid ? 'Hash chain intact' : `Integrity violation — ${verifyResult.tampered_count} entries tampered`}</div>
+              <div className="text-[var(--color-text-sec)] text-xs">{verifyResult.valid ? `All ${verifyResult.total_entries} entries verified` : `First broken at entry #${verifyResult.first_broken_at}`}</div>
             </div>
-            <button className="btn" style={{ marginLeft: 'auto' }} onClick={() => setVerifyResult(null)}>✕</button>
+            <button className={btnCls + ' ml-auto'} onClick={() => setVerifyResult(null)}>✕</button>
           </div>
         </div>
       )}
 
-      <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input className="input-box" style={{ width: 160 }} placeholder="Filter by actor..." value={actorFilter} onChange={(e) => setActorFilter(e.target.value)} />
-          <select className="select-box" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
+      <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3 mb-3">
+        <div className="flex gap-2">
+          <input className="w-[160px] bg-[var(--color-bg-root)] border border-[var(--color-bg-border)] rounded px-2.5 py-1.5 text-xs text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] hover:border-[var(--color-text-muted)] transition-colors" placeholder="Filter by actor..." value={actorFilter} onChange={(e) => setActorFilter(e.target.value)} />
+          <select className="bg-[var(--color-bg-root)] border border-[var(--color-bg-border)] rounded px-2.5 py-1.5 text-xs text-[var(--color-text)] outline-none cursor-pointer hover:border-[var(--color-text-muted)] transition-colors" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
             <option value="all">All Actions</option><option value="login">Login</option><option value="rule">Rule</option><option value="block">Block</option><option value="backup">Backup</option><option value="user">User</option>
           </select>
         </div>
       </div>
 
-      <div className="panel" style={{ overflow: 'hidden', marginBottom: 12 }}>
+      <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded overflow-hidden mb-3">
         {loading ? <SkeletonRows count={5} cols={7} /> : error ? <LoadingError message={error} onRetry={fetch} /> : (
-          <table>
-            <thead><tr>{['Timestamp','Actor','Action','Resource','IP','Status','Hash'].map((h) => <th key={h}>{h}</th>)}</tr></thead>
+          <table className="w-full border-collapse">
+            <thead><tr className="border-b border-[var(--color-bg-border)]">{['Timestamp','Actor','Action','Resource','IP','Status','Hash'].map((h) => <th key={h} className="px-2.5 py-2 text-left text-[var(--color-text-sec)] text-[10px] font-semibold uppercase tracking-wider">{h}</th>)}</tr></thead>
             <tbody>
               {filtered.length === 0 ? <tr><td colSpan={7}><EmptyState msg="No audit entries match filters." /></td></tr> : (
                 filtered.slice(0, 50).map((e) => (
-                  <tr key={e.id} style={{ cursor: 'pointer' }} onClick={() => setSelected(selected?.id === e.id ? null : e)}>
-                    <td className="cell-mono cell-dim" style={{ fontSize: 11 }} title={new Date(e.timestamp).toLocaleString()}>{new Date(e.timestamp).toLocaleString()}</td>
-                    <td>{e.actor}</td>
-                    <td className="cell-mono" style={{ color: colors[actionGroup(e.action)] || 'var(--text)' }}>{e.action}</td>
-                    <td className="cell-dim">{e.resource}</td>
-                    <td className="cell-mono cell-dim">{e.ip_address || '—'}</td>
-                    <td><Badge variant={e.success ? 'success' : 'failed'}>{e.success ? '✓' : '✗'}</Badge></td>
-                    <td className="cell-mono" style={{ color: 'var(--text-muted)', fontSize: 11 }} title={e.hash}>{(e.hash || '').slice(0, 12)}...</td>
+                  <tr key={e.id} className="border-b border-[var(--color-bg-border)] hover:bg-[var(--color-bg-elevated)] transition-colors cursor-pointer" onClick={() => setSelected(selected?.id === e.id ? null : e)}>
+                    <td className="px-2.5 py-2 text-mono text-[var(--color-text-sec)] text-[11px]" title={new Date(e.timestamp).toLocaleString()}>{new Date(e.timestamp).toLocaleString()}</td>
+                    <td className="px-2.5 py-2 text-xs">{e.actor}</td>
+                    <td className="px-2.5 py-2 text-mono text-[11px]" style={{ color: colors[actionGroup(e.action)] || 'var(--color-text)' }}>{e.action}</td>
+                    <td className="px-2.5 py-2 text-xs text-[var(--color-text-sec)]">{e.resource}</td>
+                    <td className="px-2.5 py-2 text-mono text-[11px] text-[var(--color-text-sec)]">{e.ip_address || '—'}</td>
+                    <td className="px-2.5 py-2"><Badge variant={e.success ? 'success' : 'failed'}>{e.success ? '✓' : '✗'}</Badge></td>
+                    <td className="px-2.5 py-2 text-mono text-[var(--color-text-muted)] text-[11px]" title={e.hash}>{(e.hash || '').slice(0, 12)}...</td>
                   </tr>
                 ))
               )}
@@ -81,30 +83,30 @@ export default function Audit() {
       </div>
 
       {entries.length > 0 && (
-        <div className="card">
-          <div style={{ color: 'var(--text-sec)', fontSize: 12, marginBottom: 8 }}>🔗 Hash Chain (last 5)</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-            {entries.slice(0, 5).map((e) => (
-              <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <div style={{ padding: '4px 8px', background: 'var(--bg-elevated)', borderRadius: 4, border: '1px solid var(--bg-border)', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>{(e.hash || '').slice(0, 8)}</div>
-                <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>→</span>
-              </div>
+        <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3.5">
+          <div className="text-[var(--color-text-sec)] text-xs mb-2">🔗 Hash Chain (last 5)</div>
+          <div className="flex items-center gap-1 flex-wrap">
+            {entries.slice(0, 5).map((e, i) => (
+              <span key={e.id} className="flex items-center gap-1">
+                <div className="px-2 py-1 bg-[var(--color-bg-elevated)] rounded border border-[var(--color-bg-border)] text-mono text-[10px] text-[var(--color-text-muted)]">{(e.hash || '').slice(0, 8)}</div>
+                {i < 4 && <span className="text-[var(--color-text-muted)] text-[10px]">→</span>}
+              </span>
             ))}
           </div>
         </div>
       )}
 
       {selected && (
-        <div className="card" style={{ marginTop: 12, animation: 'fadeSlideIn 0.2s ease' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <span style={{ color: 'var(--cyan)', fontSize: 12, fontFamily: 'var(--font-mono)' }}>Audit Entry #{selected.id}</span>
-            <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: 'var(--text-sec)', cursor: 'pointer' }}>✕</button>
+        <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3.5 mt-3 animate-fade">
+          <div className="flex justify-between mb-3">
+            <span className="text-[var(--color-green-400)] text-xs text-mono">Audit Entry #{selected.id}</span>
+            <button onClick={() => setSelected(null)} className="bg-none border-none text-[var(--color-text-sec)] cursor-pointer">✕</button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          <div className="grid grid-cols-3 gap-2">
             {[['Timestamp', new Date(selected.timestamp).toLocaleString()], ['Actor', selected.actor], ['Action', selected.action], ['Resource', selected.resource], ['IP', selected.ip_address || '—'], ['Status', selected.success ? 'Success' : 'Failed'], ['Hash', selected.hash], ['Previous Hash', selected.previous_hash]].map(([l, v]) => (
-              <div key={l} style={{ padding: 8, background: 'var(--bg-elevated)', borderRadius: 6 }}>
-                <div style={{ color: 'var(--text-sec)', fontSize: 11 }}>{l}</div>
-                <div className="cell-mono" style={{ wordBreak: 'break-all' }}>{v}</div>
+              <div key={l} className="p-2 bg-[var(--color-bg-elevated)] rounded border border-[var(--color-bg-border)]">
+                <div className="text-[var(--color-text-sec)] text-[11px]">{l}</div>
+                <div className="text-mono text-xs break-all">{v}</div>
               </div>
             ))}
           </div>

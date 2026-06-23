@@ -3,6 +3,8 @@ import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tool
 import * as api from '../api.js';
 import { PageHeader, LoadingError } from '../components/Shared.jsx';
 
+const cardCls = "bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3.5 transition-colors hover:border-[var(--color-text-muted)]";
+
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [error, setError] = useState(null);
@@ -26,115 +28,97 @@ export default function Dashboard() {
   useEffect(() => {
     fetchStats();
     const interval = setInterval(fetchStats, 5000);
-
     const wsCleanup = api.connectWebSocket((msg) => {
       const addEvent = (severity, text) => setLiveEvents((prev) => [...prev.slice(-49), { time: new Date().toLocaleTimeString(), msg: text, severity }]);
-
-      if (msg.event_type === 'stats' && msg.data) {
-        setStats(msg.data);
-      } else if (msg.event_type === 'connection' && msg.data) {
-        addEvent('info', `Connection: ${msg.data.src_ip} → ${msg.data.dst_ip} (${msg.data.state})`);
-      } else if (msg.event_type === 'alert' && msg.data) {
-        addEvent(msg.data.severity || 'warning', msg.data.message || 'Alert fired');
-      }
+      if (msg.event_type === 'stats' && msg.data) setStats(msg.data);
+      else if (msg.event_type === 'connection' && msg.data) addEvent('info', `Connection: ${msg.data.src_ip} → ${msg.data.dst_ip} (${msg.data.state})`);
+      else if (msg.event_type === 'alert' && msg.data) addEvent(msg.data.severity || 'warning', msg.data.message || 'Alert fired');
     });
-
-    return () => {
-      clearInterval(interval);
-      if (wsCleanup) wsCleanup();
-    };
+    return () => { clearInterval(interval); if (wsCleanup) wsCleanup(); };
   }, [fetchStats]);
 
-  const protoData = [
-    { name: 'TCP', value: 45 },
-    { name: 'UDP', value: 22 },
-    { name: 'ICMP', value: 8 },
-  ];
+  const protoData = [{ name: 'TCP', value: 45 }, { name: 'UDP', value: 22 }, { name: 'ICMP', value: 8 }];
 
   return (
-    <div className="fade-in">
+    <div className="animate-fade">
       <PageHeader title="Dashboard" subtitle="Real-time network overview" />
 
       {error && <LoadingError message={error} onRetry={fetchStats} />}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+      <div className="grid grid-cols-4 gap-2.5 mb-4">
         {[
-          { label: 'Packets Allowed', value: stats?.packets_allowed?.toLocaleString() || '—', color: 'var(--green)', icon: '📦' },
-          { label: 'Packets Dropped', value: stats?.packets_dropped?.toLocaleString() || '—', color: 'var(--red)', icon: '🚫' },
-          { label: 'Active Connections', value: stats?.active_connections || '—', color: 'var(--cyan)', icon: '🔗' },
-          { label: 'Blocked IPs', value: stats?.blocked_ips || '—', color: 'var(--yellow)', icon: '🌐' },
-        ].map((c) => (
-          <div key={c.label} className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ color: 'var(--text-sec)', fontSize: 12 }}>{c.icon} {c.label}</span>
-            </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 700 }}>{c.value}</div>
+          [stats?.packets_allowed?.toLocaleString() || '—', 'PACKETS ALLOWED', 'var(--color-green-400)'],
+          [stats?.packets_dropped?.toLocaleString() || '—', 'PACKETS DROPPED', 'var(--color-red-400)'],
+          [stats?.active_connections || '—', 'ACTIVE CONNS', 'var(--color-green-400)'],
+          [stats?.blocked_ips || '—', 'BLOCKED IPS', 'var(--color-yellow-400)'],
+        ].map(([val, label, color]) => (
+          <div key={label} className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3 transition-colors hover:border-[var(--color-text-muted)]">
+            <div className="text-[var(--color-text-sec)] text-[10px] font-medium uppercase tracking-wider mb-1">{label}</div>
+            <div className="text-mono text-[26px] font-bold text-[var(--color-text)]">{val}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-        <div className="card">
-          <div style={{ color: 'var(--text-sec)', fontSize: 12, marginBottom: 12 }}>📈 Packet Rate</div>
+      <div className="grid grid-cols-2 gap-2.5 mb-4">
+        <div className={cardCls}>
+          <div className="text-[var(--color-text-sec)] text-[10px] font-medium uppercase tracking-wider mb-2.5">Packet Rate</div>
           {packetWindow.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={packetWindow}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--bg-border)" />
-                <XAxis dataKey="time" stroke="var(--text-muted)" tick={{ fontSize: 10 }} />
-                <YAxis stroke="var(--text-muted)" tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ background: 'var(--bg-panel)', border: '1px solid var(--bg-border)', borderRadius: 8, color: 'var(--text)' }} />
-                <Line type="monotone" dataKey="allowed" stroke="var(--green)" strokeWidth={2} dot={false} isAnimationActive animationDuration={800} />
-                <Line type="monotone" dataKey="dropped" stroke="var(--red)" strokeWidth={2} dot={false} isAnimationActive animationDuration={800} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-bg-border)" />
+                <XAxis dataKey="time" stroke="var(--color-text-muted)" tick={{ fontSize: 10 }} />
+                <YAxis stroke="var(--color-text-muted)" tick={{ fontSize: 10 }} />
+                <Tooltip contentStyle={{ background: 'var(--color-bg-panel)', border: '1px solid var(--color-bg-border)', borderRadius: 4, color: 'var(--color-text)', fontSize: 12 }} />
+                <Line type="monotone" dataKey="allowed" stroke="var(--color-green-400)" strokeWidth={2} dot={false} isAnimationActive animationDuration={800} />
+                <Line type="monotone" dataKey="dropped" stroke="var(--color-red-400)" strokeWidth={2} dot={false} isAnimationActive animationDuration={800} />
               </LineChart>
             </ResponsiveContainer>
-          ) : (
-            <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Collecting data...</div>
-          )}
+          ) : <div className="h-[200px] flex items-center justify-center text-[var(--color-text-muted)] text-xs">Collecting data...</div>}
         </div>
 
-        <div className="card">
-          <div style={{ color: 'var(--text-sec)', fontSize: 12, marginBottom: 12 }}>🍩 Protocol Distribution</div>
+        <div className={cardCls}>
+          <div className="text-[var(--color-text-sec)] text-[10px] font-medium uppercase tracking-wider mb-2.5">Protocol Distribution</div>
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
               <Pie data={protoData} dataKey="value" cx="50%" cy="50%" outerRadius={70} innerRadius={35} isAnimationActive animationDuration={800}>
-                {protoData.map((e, i) => <Cell key={e.name} fill={['var(--cyan)', 'var(--purple)', 'var(--yellow)'][i]} />)}
+                {protoData.map((e, i) => <Cell key={e.name} fill={['var(--color-green-400)', 'var(--color-blue-400)', 'var(--color-yellow-400)'][i]} />)}
               </Pie>
-              <Tooltip contentStyle={{ background: 'var(--bg-panel)', border: '1px solid var(--bg-border)', borderRadius: 8, color: 'var(--text)' }} />
-              <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-sec)' }} />
+              <Tooltip contentStyle={{ background: 'var(--color-bg-panel)', border: '1px solid var(--color-bg-border)', borderRadius: 4, color: 'var(--color-text)', fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: 11, color: 'var(--color-text-sec)' }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div style={{ color: 'var(--text-sec)', fontSize: 12, marginBottom: 12 }}>⚡ Live Event Feed</div>
-        <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+      <div className={cardCls + ' mb-4'}>
+        <div className="text-[var(--color-text-sec)] text-[10px] font-medium uppercase tracking-wider mb-2.5">Live Event Feed</div>
+        <div className="max-h-60 overflow-y-auto">
           {liveEvents.length === 0 ? (
-            <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 24 }}>Waiting for events...</div>
+            <div className="text-[var(--color-text-muted)] text-center py-6">Waiting for events...</div>
           ) : (
             liveEvents.slice(-15).map((e, i) => (
-              <div key={i} style={{ display: 'flex', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--bg-border)', alignItems: 'center' }}>
-                <span style={{ color: 'var(--text-muted)', fontSize: 11, fontFamily: 'var(--font-mono)', minWidth: 70 }}>{e.time}</span>
-                <span className="badge" style={{ background: e.severity === 'critical' ? 'var(--red)' : e.severity === 'warning' ? 'var(--yellow)' : 'var(--cyan)', color: e.severity === 'critical' ? '#fff' : '#000' }}>{e.severity || 'info'}</span>
-                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)' }}>{e.msg}</span>
+              <div key={i} className="flex gap-2 py-1.5 border-b border-[var(--color-bg-border)] items-center">
+                <span className="text-[var(--color-text-muted)] text-[11px] font-mono min-w-[70px]">{e.time}</span>
+                <span className={`inline-flex items-center rounded-[3px] px-2 py-0.5 text-[10px] font-semibold text-mono ${e.severity === 'critical' ? 'bg-[var(--color-red-400)] text-white' : e.severity === 'warning' ? 'bg-[var(--color-yellow-400)] text-black' : 'bg-[var(--color-green-400)] text-black'}`}>{e.severity || 'info'}</span>
+                <span className="text-xs text-mono">{e.msg}</span>
               </div>
             ))
           )}
         </div>
       </div>
 
-      <div className="card">
-        <div style={{ color: 'var(--text-sec)', fontSize: 12, marginBottom: 12 }}>🔋 System Health</div>
+      <div className={cardCls}>
+        <div className="text-[var(--color-text-sec)] text-[10px] font-medium uppercase tracking-wider mb-2.5">System Health</div>
         {[
-          { label: 'API', status: stats ? 'ONLINE' : '—', color: stats ? 'var(--green)' : 'var(--red)' },
-          { label: 'eBPF', status: stats?.packets_allowed != null ? 'ACTIVE' : '—', color: stats?.packets_allowed != null ? 'var(--green)' : 'var(--red)' },
-          { label: 'DB', status: 'IN-MEMORY', color: 'var(--cyan)' },
-          { label: 'WebSocket', status: 'CONNECTED', color: 'var(--green)' },
+          { label: 'API', status: stats ? 'ONLINE' : '—', color: stats ? 'var(--color-green-400)' : 'var(--color-red-400)' },
+          { label: 'eBPF', status: stats?.packets_allowed != null ? 'ACTIVE' : '—', color: stats?.packets_allowed != null ? 'var(--color-green-400)' : 'var(--color-red-400)' },
+          { label: 'DB', status: 'IN-MEMORY', color: 'var(--color-green-400)' },
+          { label: 'WebSocket', status: 'CONNECTED', color: 'var(--color-green-400)' },
         ].map((s) => (
-          <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0', borderBottom: '1px solid var(--bg-border)' }}>
-            <span className="live-dot" style={{ background: s.color, animation: 'livePulse 2s infinite' }} />
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{s.label}</span>
-            <span style={{ color: 'var(--text-sec)', fontSize: 12, marginLeft: 'auto' }}>● {s.status}</span>
+          <div key={s.label} className="flex items-center gap-2 py-2.5 border-b border-[var(--color-bg-border)] last:border-none">
+            <span className="w-[7px] h-[7px] rounded-full animate-live shrink-0" style={{ background: s.color }} />
+            <span className="text-mono text-[11px] flex-1">{s.label}</span>
+            <span className="text-[var(--color-text-sec)] text-[10px] text-mono ml-auto">● {s.status}</span>
           </div>
         ))}
       </div>

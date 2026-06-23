@@ -18,19 +18,23 @@ const NAV_ITEMS = [
   { path: '/rules', icon: '⊞', label: 'Rules' },
   { path: '/connections', icon: '⊷', label: 'Connections' },
   { path: '/alerts', icon: '⚡', label: 'Alerts' },
-  { path: '/audit', icon: '⊟', label: 'Audit Log' },
+  { path: '/audit', icon: '⊟', label: 'Audit' },
   { path: '/reputation', icon: '◉', label: 'Reputation' },
   { path: '/settings', icon: '⚙', label: 'Settings' },
 ];
 
 const ARGUS_EYE = (
-  <svg width="28" height="28" viewBox="0 0 40 40" style={{ flexShrink: 0 }}>
-    <circle cx="20" cy="20" r="18" fill="none" stroke="var(--cyan)" strokeWidth="2" />
-    <circle cx="20" cy="20" r="10" fill="var(--cyan-glow)" />
-    <ellipse cx="20" cy="20" rx="5" ry="7" fill="var(--cyan)" style={{ animation: 'eyeScan 4s ease-in-out infinite' }} />
-    <circle cx="20" cy="20" r="2" fill="var(--bg-root)" />
+  <svg width="22" height="22" viewBox="0 0 40 40" className="shrink-0">
+    <circle cx="20" cy="20" r="18" fill="none" stroke="var(--color-green-500)" strokeWidth="2" />
+    <circle cx="20" cy="20" r="10" fill="var(--color-green-dim)" />
+    <ellipse cx="20" cy="20" rx="5" ry="7" fill="var(--color-green-400)" style={{ animation: 'eyeScan 4s ease-in-out infinite' }} />
+    <circle cx="20" cy="20" r="2" fill="var(--color-bg-root)" />
   </svg>
 );
+
+function btnClass(active) {
+  return `flex items-center gap-2 w-full px-3.5 py-2 border-l-2 text-xs transition-all cursor-pointer text-left font-body border-transparent text-[var(--color-text-sec)] hover:bg-[#001a12] hover:text-[var(--color-text)] ${active ? '!border-[var(--color-green-400)] !text-[var(--color-green-500)] !bg-[#001a12]' : ''}`;
+}
 
 function Sidebar({ alertCount }) {
   const location = useLocation();
@@ -38,37 +42,37 @@ function Sidebar({ alertCount }) {
   const auth = useContext(AuthContext);
 
   return (
-    <div className="sidebar">
-      <div className="sidebar-brand">
+    <div className="w-[200px] bg-[#000a06] border-r border-[var(--color-bg-border)] flex flex-col shrink-0">
+      <div className="flex items-center gap-2 px-3.5 py-4 border-b border-[var(--color-bg-border)] text-[15px] font-bold text-mono tracking-wider">
         {ARGUS_EYE}
         <span>ARGUS</span>
       </div>
-
-      <nav className="sidebar-nav">
+      <nav className="flex-1 py-1">
         {NAV_ITEMS.map((item) => (
           <button
             key={item.path}
             onClick={() => navigate(item.path)}
-            className={`sidebar-nav-item ${location.pathname === item.path ? 'active' : ''}`}
+            className={btnClass(location.pathname === item.path)}
           >
-            <span className="icon">{item.icon}</span>
+            <span className="text-sm w-[18px] text-center">{item.icon}</span>
             <span>{item.label}</span>
             {item.path === '/alerts' && alertCount > 0 && (
-              <span className="badge" style={{ background: 'var(--red)', color: '#fff' }}>{alertCount}</span>
+              <span className="inline-flex items-center rounded-[3px] px-2 py-0.5 text-[10px] font-semibold text-mono bg-[var(--color-red-400)] text-white ml-auto">{alertCount}</span>
             )}
           </button>
         ))}
       </nav>
-
-      <div className="sidebar-footer">
-        <div className="sidebar-user">
-          <div className="sidebar-avatar">{auth.user?.username?.[0]?.toUpperCase() || '?'}</div>
+      <div className="px-3.5 py-2.5 border-t border-[var(--color-bg-border)]">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-[26px] h-[26px] rounded-full bg-[var(--color-green-400)] flex items-center justify-center text-black text-[11px] font-bold">
+            {auth.user?.username?.[0]?.toUpperCase() || '?'}
+          </div>
           <div>
-            <div className="sidebar-user-name">{auth.user?.username || '...'}</div>
+            <div className="text-[var(--color-text)] text-[11px]">{auth.user?.username || '...'}</div>
             {auth.user?.role && <Badge variant={auth.user.role}>{auth.user.role}</Badge>}
           </div>
         </div>
-        <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center' }} onClick={auth.logout}>
+        <button className="w-full inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs rounded bg-transparent text-[var(--color-text-sec)] border border-[var(--color-bg-border)] hover:bg-[var(--color-bg-elevated)] hover:border-[var(--color-text-muted)] transition-all" onClick={auth.logout}>
           Logout
         </button>
       </div>
@@ -78,24 +82,25 @@ function Sidebar({ alertCount }) {
 
 function ProtectedLayout() {
   const auth = useContext(AuthContext);
+  const location = useLocation();
   const [alertCount, setAlertCount] = useState(0);
-  const [wsCleanup, setWsCleanup] = useState(null);
 
   useEffect(() => {
     const cleanup = api.connectWebSocket((msg) => {
       if (msg.event_type === 'alert') setAlertCount((c) => c + 1);
     });
-    setWsCleanup(() => cleanup);
     return () => { if (cleanup && typeof cleanup === 'function') cleanup(); };
   }, []);
 
   if (!auth.user) return <Navigate to="/login" replace />;
 
   return (
-    <div className="layout">
+    <div className="flex h-screen bg-[var(--color-bg-root)]">
       <Sidebar alertCount={alertCount} />
-      <div className="main-content fade-in" key={location.pathname}>
-        <Outlet />
+      <div className="flex-1 p-5 overflow-auto bg-[var(--color-bg-root)]" key={location.pathname}>
+        <div className="animate-fade">
+          <Outlet />
+        </div>
       </div>
     </div>
   );
