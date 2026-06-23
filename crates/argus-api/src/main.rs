@@ -11,7 +11,6 @@ use std::sync::Arc;
 
 use axum::Router;
 use rand::RngCore;
-use tokio::net::TcpListener;
 use tokio::signal;
 use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
 use tracing::{error, info, warn};
@@ -35,6 +34,8 @@ use argus_core::vpn_portal::VpnPortalManager;
 use argus_observability::metrics::ArgusMetrics;
 
 use crate::auth::{AuthConfig, Role};
+use crate::db_audit_store::PostgresAuditStore;
+use crate::db_connection_store::PostgresConnectionStore;
 use crate::websocket::LiveEventBus;
 
 pub struct AppState {
@@ -45,7 +46,7 @@ pub struct AppState {
     pub metrics: ArgusMetrics,
     pub event_bus: LiveEventBus,
     pub auth_config: AuthConfig,
-    pub audit_log: AuditLog,
+    pub audit_log: Arc<AuditLog>,
     pub alert_manager: AlertManager,
     pub tenant_manager: TenantManager,
     pub cluster_manager: ClusterManager,
@@ -57,6 +58,8 @@ pub struct AppState {
     pub compliance: ComplianceEngine,
     pub syslog: SyslogForwarder,
     pub db_pool: Option<sqlx::PgPool>,
+    pub db_audit_store: Option<Arc<PostgresAuditStore>>,
+    pub db_connection_store: Option<Arc<PostgresConnectionStore>>,
     pub backup_manager: BackupManager,
 }
 
@@ -395,7 +398,7 @@ async fn try_main() -> anyhow::Result<()> {
     let scan_detector = Arc::new(ScanDetector::new());
     let metrics = ArgusMetrics::new();
     let event_bus = LiveEventBus::new(1024);
-    let audit_log = AuditLog::new();
+    let audit_log = Arc::new(AuditLog::new());
     let alert_manager = AlertManager::new();
     let tenant_manager = TenantManager::new();
     let cluster_manager = ClusterManager::new(uuid::Uuid::new_v4());
@@ -471,6 +474,43 @@ async fn try_main() -> anyhow::Result<()> {
         info!("Users already exist — skipping admin creation");
     }
 
+    // Wire Postgres-backed stores when available
+    let db_audit_store: Option<Arc<PostgresAuditStore>> = if db_pool.is_some() {
+        match std::env::var("DATABASE_URL") {
+            Ok(ref db_url) => match PostgresAuditStore::new(db_url).await {
+                Ok(store) => {
+                    info!("PostgresAuditStore wired");
+                    Some(Arc::new(store))
+                }
+                Err(e) => {
+                    warn!("PostgresAuditStore init failed: {}. Skipping.", e);
+                    None
+                }
+            },
+            Err(_) => None,
+        }
+    } else {
+        None
+    };
+
+    let db_connection_store: Option<Arc<PostgresConnectionStore>> = if db_pool.is_some() {
+        match std::env::var("DATABASE_URL") {
+            Ok(ref db_url) => match PostgresConnectionStore::new(db_url).await {
+                Ok(store) => {
+                    info!("PostgresConnectionStore wired");
+                    Some(Arc::new(store))
+                }
+                Err(e) => {
+                    warn!("PostgresConnectionStore init failed: {}. Skipping.", e);
+                    None
+                }
+            },
+            Err(_) => None,
+        }
+    } else {
+        None
+    };
+
     let state = Arc::new(AppState {
         rule_engine,
         connection_tracker,
@@ -479,7 +519,7 @@ async fn try_main() -> anyhow::Result<()> {
         metrics,
         event_bus,
         auth_config,
-        audit_log,
+        audit_log: audit_log.clone(),
         alert_manager,
         tenant_manager,
         cluster_manager,
@@ -491,6 +531,8 @@ async fn try_main() -> anyhow::Result<()> {
         compliance,
         syslog,
         db_pool,
+        db_audit_store: db_audit_store.clone(),
+        db_connection_store: db_connection_store.clone(),
         backup_manager,
     });
 
@@ -524,22 +566,112 @@ async fn try_main() -> anyhow::Result<()> {
     });
     info!("GC background tasks started");
 
-    let app = app(state);
+    // Background Postgres audit log sync
+    if let Some(ref pg_audit) = db_audit_store {
+        let audit_log_pg = state.audit_log.clone();
+        let pg_audit = pg_audit.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                let entries = audit_log_pg.query(None, None, 50);
+                for entry in entries {
+                    let _ = pg_audit
+                        .log(
+                            &entry.actor,
+                            &entry.action,
+                            &entry.resource,
+                            &entry.details,
+                            entry.ip_address.as_deref(),
+                            entry.success,
+                        )
+                        .await;
+                }
+            }
+        });
+        info!("Postgres audit log sync started");
+    }
 
-    let listener = TcpListener::bind("0.0.0.0:8443").await?;
-    info!("Ready. Listening on http://0.0.0.0:8443");
-    eprintln!();
-    eprintln!("  ========================================");
-    eprintln!("  ARGUS API — http://127.0.0.1:8443");
-    eprintln!("  Health:     http://127.0.0.1:8443/health");
-    eprintln!("  Admin user: {}", admin_user);
-    eprintln!("  Password:   set via ARGUS_ADMIN_PASS env");
-    eprintln!("  ========================================");
-    eprintln!();
+    // Background Postgres connection store sync
+    if let Some(ref pg_conn) = db_connection_store {
+        let conn_tracker_pg = state.connection_tracker.clone();
+        let pg_conn = pg_conn.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                let entries = conn_tracker_pg.list_all();
+                for entry in entries {
+                    let _ = pg_conn.insert_connection(&entry).await;
+                }
+                let _ = pg_conn.gc().await;
+            }
+        });
+        info!("Postgres connection store sync started");
+    }
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    let app = app(state.clone());
+
+    let tls_cert = std::env::var("ARGUS_TLS_CERT").ok();
+    let tls_key = std::env::var("ARGUS_TLS_KEY").ok();
+
+    match (tls_cert, tls_key) {
+        (Some(cert_path), Some(key_path)) => {
+            let config =
+                axum_server::tls_rustls::RustlsConfig::from_pem_file(&cert_path, &key_path)
+                    .await
+                    .map_err(|e| {
+                        anyhow::anyhow!(
+                            "TLS config error: {}. cert={}, key={}",
+                            e,
+                            cert_path,
+                            key_path
+                        )
+                    })?;
+
+            let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 8443));
+            info!("Ready. Listening on https://0.0.0.0:8443 (TLS)");
+            eprintln!();
+            eprintln!("  ========================================");
+            eprintln!("  ARGUS API — https://127.0.0.1:8443");
+            eprintln!("  Health:     https://127.0.0.1:8443/health");
+            eprintln!("  Admin user: {}", admin_user);
+            eprintln!("  TLS cert:   {}", cert_path);
+            eprintln!("  ========================================");
+            eprintln!();
+
+            let handle = axum_server::Handle::new();
+            let server_handle = handle.clone();
+            tokio::spawn(async move {
+                shutdown_signal().await;
+                info!("Shutdown signal received — draining TLS connections...");
+                server_handle.shutdown();
+            });
+
+            axum_server::bind_rustls(addr, config)
+                .handle(handle)
+                .serve(app.clone().into_make_service())
+                .await
+                .map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
+        }
+        _ => {
+            warn!("ARGUS_TLS_CERT and ARGUS_TLS_KEY not both set — using plain HTTP (insecure)");
+            let listener = tokio::net::TcpListener::bind("0.0.0.0:8443").await?;
+            info!("Ready. Listening on http://0.0.0.0:8443 (plain HTTP)");
+            eprintln!();
+            eprintln!("  ========================================");
+            eprintln!("  ARGUS API — http://127.0.0.1:8443");
+            eprintln!("  Health:     http://127.0.0.1:8443/health");
+            eprintln!("  Admin user: {}", admin_user);
+            eprintln!("  Password:   set via ARGUS_ADMIN_PASS env");
+            eprintln!("  ========================================");
+            eprintln!("  WARNING: No TLS configured — all traffic in cleartext");
+            eprintln!("  Set ARGUS_TLS_CERT and ARGUS_TLS_KEY env vars for TLS");
+            eprintln!("  ========================================");
+            eprintln!();
+            axum::serve(listener, app)
+                .with_graceful_shutdown(shutdown_signal())
+                .await?;
+        }
+    }
 
     Ok(())
 }

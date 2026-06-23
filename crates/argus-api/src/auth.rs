@@ -17,6 +17,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 const ACCESS_TOKEN_EXPIRY_SECS: usize = 900;
 const REFRESH_TOKEN_EXPIRY_SECS: usize = 86400;
@@ -528,7 +529,7 @@ impl IntoResponse for AuthError {
 
 #[derive(Clone)]
 pub struct AuthConfig {
-    pub jwt_secret: Vec<u8>,
+    pub jwt_secret: Zeroizing<Vec<u8>>,
     pub jwt_auth: JwtAuth,
     pub user_store: Arc<UserStore>,
 }
@@ -537,7 +538,7 @@ impl AuthConfig {
     pub fn new(jwt_secret: Vec<u8>) -> Self {
         let jwt_auth = JwtAuth::new(&jwt_secret);
         Self {
-            jwt_secret,
+            jwt_secret: Zeroizing::new(jwt_secret),
             jwt_auth,
             user_store: Arc::new(UserStore::new()),
         }
