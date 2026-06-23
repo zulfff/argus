@@ -1,4 +1,5 @@
 use argus_common::error::Result;
+use argus_common::net::{ip_in_cidr, proto_matches};
 use argus_common::types::{Action, CidrRule, Direction};
 use async_trait::async_trait;
 use std::net::IpAddr;
@@ -102,67 +103,6 @@ impl RuleEngine {
             }
         }
         true
-    }
-}
-
-fn ip_in_cidr(ip: IpAddr, cidr: &str) -> bool {
-    let parts: Vec<&str> = cidr.split('/').collect();
-    if parts.len() != 2 {
-        return false;
-    }
-    let prefix_len: u32 = match parts[1].parse() {
-        Ok(n) => n,
-        Err(_) => return false,
-    };
-    let net_ip: IpAddr = match parts[0].parse() {
-        Ok(ip) => ip,
-        Err(_) => return false,
-    };
-    match (ip, net_ip) {
-        (IpAddr::V4(ip), IpAddr::V4(net)) => {
-            if prefix_len > 32 {
-                return false;
-            }
-            let ip_bits = u32::from(ip);
-            let net_bits = u32::from(net);
-            let mask = if prefix_len == 0 {
-                0
-            } else {
-                u32::MAX.wrapping_shl(32u32.saturating_sub(prefix_len))
-            };
-            (ip_bits & mask) == (net_bits & mask)
-        }
-        (IpAddr::V6(ip), IpAddr::V6(net)) => {
-            if prefix_len > 128 {
-                return false;
-            }
-            let ip_bits = u128::from(ip);
-            let net_bits = u128::from(net);
-            let mask = if prefix_len == 0 {
-                0
-            } else {
-                u128::MAX.wrapping_shl(128u32.saturating_sub(prefix_len))
-            };
-            (ip_bits & mask) == (net_bits & mask)
-        }
-        _ => false,
-    }
-}
-
-fn proto_matches(protocol: u8, proto_str: &str) -> bool {
-    match proto_str.to_lowercase().as_str() {
-        "tcp" => protocol == 6,
-        "udp" => protocol == 17,
-        "icmp" => protocol == 1,
-        "icmpv6" => protocol == 58,
-        "any" => true,
-        _ => {
-            if let Ok(n) = proto_str.parse::<u8>() {
-                protocol == n
-            } else {
-                false
-            }
-        }
     }
 }
 

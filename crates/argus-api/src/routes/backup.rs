@@ -343,14 +343,20 @@ async fn restore_from_snapshot(
                 "operator" => crate::auth::Role::Operator,
                 _ => crate::auth::Role::Viewer,
             };
-            let password = user_val
+            let password_hash = user_val
                 .get("password_hash")
                 .and_then(|v| v.as_str())
-                .unwrap_or("changeme");
+                .unwrap_or("");
+            if password_hash.is_empty() {
+                return Err(format!(
+                    "Missing password_hash for user '{}' in backup",
+                    username
+                ));
+            }
             state
                 .auth_config
                 .user_store
-                .add_user(username, password, role)
+                .restore_user(username, password_hash, role)
                 .await
                 .map_err(|e| format!("Failed to restore user '{}': {}", username, e))?;
         }

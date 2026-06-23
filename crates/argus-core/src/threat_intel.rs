@@ -15,6 +15,7 @@ const MAX_BLOCKLIST_SIZE: usize = 1_000_000;
 #[derive(Debug, Clone)]
 pub struct ThreatEntry {
     pub ip: IpAddr,
+    pub cidr: Option<String>,
     pub source: String,
     pub reason: String,
     pub added_at: DateTime<Utc>,
@@ -23,6 +24,7 @@ pub struct ThreatEntry {
 
 pub struct ThreatIntelligence {
     entries: Mutex<HashMap<IpAddr, ThreatEntry>>,
+    cidr_entries: Mutex<Vec<ThreatEntry>>,
     client: Client,
     last_refresh: Mutex<Option<DateTime<Utc>>>,
 }
@@ -31,6 +33,7 @@ impl ThreatIntelligence {
     pub fn new() -> Self {
         Self {
             entries: Mutex::new(HashMap::new()),
+            cidr_entries: Mutex::new(Vec::new()),
             client: Client::builder()
                 .timeout(Duration::from_secs(30))
                 .user_agent("argus-threat-intel/0.1.0")
@@ -149,6 +152,7 @@ impl ThreatIntelligence {
                         ip,
                         ThreatEntry {
                             ip,
+                            cidr: None,
                             source: "AbuseIPDB".into(),
                             reason,
                             added_at: now,
@@ -170,7 +174,23 @@ impl ThreatIntelligence {
         let Ok(entries) = self.entries.lock() else {
             return true;
         };
-        entries.get(&ip).is_some_and(|e| e.expires_at > now)
+        if entries.get(&ip).is_some_and(|e| e.expires_at > now) {
+            return true;
+        }
+        drop(entries);
+        if let Ok(cidr_entries) = self.cidr_entries.lock() {
+            for entry in cidr_entries.iter() {
+                if entry.expires_at <= now {
+                    continue;
+                }
+                if let Some(ref cidr) = entry.cidr {
+                    if argus_common::net::ip_in_cidr(ip, cidr) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 
     pub fn lookup_entry(&self, ip: IpAddr) -> Option<ThreatEntry> {
@@ -190,6 +210,9 @@ impl ThreatIntelligence {
         let now = Utc::now();
         if let Ok(mut entries) = self.entries.lock() {
             entries.retain(|_, e| e.expires_at > now);
+        }
+        if let Ok(mut cidr_entries) = self.cidr_entries.lock() {
+            cidr_entries.retain(|e| e.expires_at > now);
         }
     }
 
@@ -218,9 +241,14 @@ impl ThreatIntelligence {
     fn parse_drop_list(&self, body: &str, source: &str) -> usize {
         let mut count = 0;
         let now = Utc::now();
+        let expires_at = now + chrono::Duration::seconds(BLOCKLIST_TTL_SECONDS);
 
         let mut entries = match self.entries.lock() {
             Ok(e) => e,
+            Err(_) => return 0,
+        };
+        let mut cidr_entries = match self.cidr_entries.lock() {
+            Ok(c) => c,
             Err(_) => return 0,
         };
 
@@ -231,17 +259,41 @@ impl ThreatIntelligence {
             }
 
             let cidr = line.split(';').next().unwrap_or(line).trim();
-            let prefix = cidr.split('/').next().unwrap_or(cidr);
 
-            if let Ok(ip) = prefix.parse::<IpAddr>() {
+            if cidr.contains('/') {
+                if let Ok(net) = cidr.parse::<ipnetwork::IpNetwork>() {
+                    let base_ip = net.ip();
+                    entries.insert(
+                        base_ip,
+                        ThreatEntry {
+                            ip: base_ip,
+                            cidr: Some(cidr.to_string()),
+                            source: source.to_string(),
+                            reason: format!("{} blocklist", source),
+                            added_at: now,
+                            expires_at,
+                        },
+                    );
+                    cidr_entries.push(ThreatEntry {
+                        ip: base_ip,
+                        cidr: Some(cidr.to_string()),
+                        source: source.to_string(),
+                        reason: format!("{} blocklist", source),
+                        added_at: now,
+                        expires_at,
+                    });
+                    count += 1;
+                }
+            } else if let Ok(ip) = cidr.parse::<IpAddr>() {
                 entries.insert(
                     ip,
                     ThreatEntry {
                         ip,
+                        cidr: None,
                         source: source.to_string(),
                         reason: format!("{} blocklist", source),
                         added_at: now,
-                        expires_at: now + chrono::Duration::seconds(BLOCKLIST_TTL_SECONDS),
+                        expires_at,
                     },
                 );
                 count += 1;
@@ -296,9 +348,11 @@ mod tests {
         ti.parse_drop_list(body, "Test");
 
         let ip: IpAddr = "1.2.3.1".parse().unwrap();
-        assert!(!ti.is_blocked(ip));
+        assert!(ti.is_blocked(ip), "IP in CIDR range should be blocked");
         let ip_prefix: IpAddr = "1.2.3.0".parse().unwrap();
         assert!(ti.is_blocked(ip_prefix));
+        let ip_outside: IpAddr = "1.2.4.1".parse().unwrap();
+        assert!(!ti.is_blocked(ip_outside));
     }
 
     #[test]
@@ -313,6 +367,7 @@ mod tests {
                 ip,
                 ThreatEntry {
                     ip,
+                    cidr: None,
                     source: "test".into(),
                     reason: "test".into(),
                     added_at: past,

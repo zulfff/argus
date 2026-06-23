@@ -5,6 +5,8 @@ use sqlx::PgPool;
 use tracing::info;
 use uuid::Uuid;
 
+use argus_common::audit::compute_audit_hash;
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct AuditRow {
     pub id: Uuid,
@@ -147,15 +149,15 @@ impl PostgresAuditStore {
         details: &str,
         previous_hash: &str,
     ) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(id.as_bytes());
-        hasher.update(timestamp.to_rfc3339().as_bytes());
-        hasher.update(actor.as_bytes());
-        hasher.update(action.as_bytes());
-        hasher.update(resource.as_bytes());
-        hasher.update(details.as_bytes());
-        hasher.update(previous_hash.as_bytes());
-        hex::encode(hasher.finalize())
+        compute_audit_hash(
+            id,
+            timestamp,
+            actor,
+            action,
+            resource,
+            details,
+            previous_hash,
+        )
     }
 
     pub async fn query(

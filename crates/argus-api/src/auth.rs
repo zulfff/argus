@@ -21,6 +21,14 @@ use uuid::Uuid;
 const ACCESS_TOKEN_EXPIRY_SECS: usize = 900;
 const REFRESH_TOKEN_EXPIRY_SECS: usize = 86400;
 
+fn hash_password(password: &str) -> Result<String, String> {
+    let salt = SaltString::generate(&mut OsRng);
+    Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .map_err(|e| format!("password hash error: {}", e))
+        .map(|h| h.to_string())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
@@ -117,17 +125,33 @@ impl UserStore {
         password: &str,
         role: Role,
     ) -> Result<User, String> {
-        let salt = SaltString::generate(&mut OsRng);
-        let argon2 = Argon2::default();
-        let password_hash = argon2
-            .hash_password(password.as_bytes(), &salt)
-            .map_err(|e| format!("password hash error: {}", e))?
-            .to_string();
-
+        let password_hash = hash_password(password)?;
         let user = User {
             id: Uuid::new_v4(),
             username: username.to_string(),
             password_hash,
+            role,
+            enabled: true,
+        };
+
+        self.users
+            .lock()
+            .await
+            .insert(username.to_string(), user.clone());
+
+        Ok(user)
+    }
+
+    pub async fn restore_user(
+        &self,
+        username: &str,
+        password_hash: &str,
+        role: Role,
+    ) -> Result<User, String> {
+        let user = User {
+            id: Uuid::new_v4(),
+            username: username.to_string(),
+            password_hash: password_hash.to_string(),
             role,
             enabled: true,
         };
@@ -179,12 +203,7 @@ impl UserStore {
             .ok_or_else(|| format!("user '{}' not found", username))?;
 
         if let Some(pass) = password {
-            let salt = SaltString::generate(&mut OsRng);
-            let argon2 = Argon2::default();
-            user.password_hash = argon2
-                .hash_password(pass.as_bytes(), &salt)
-                .map_err(|e| format!("password hash error: {}", e))?
-                .to_string();
+            user.password_hash = hash_password(pass)?;
         }
 
         if let Some(role) = role {
@@ -218,12 +237,7 @@ impl UserStore {
             .get_mut(username)
             .ok_or_else(|| format!("user '{}' not found", username))?;
 
-        let salt = SaltString::generate(&mut OsRng);
-        let argon2 = Argon2::default();
-        user.password_hash = argon2
-            .hash_password(new_password.as_bytes(), &salt)
-            .map_err(|e| format!("password hash error: {}", e))?
-            .to_string();
+        user.password_hash = hash_password(new_password)?;
 
         Ok(())
     }

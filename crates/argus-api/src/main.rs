@@ -39,9 +39,9 @@ use crate::websocket::LiveEventBus;
 
 pub struct AppState {
     pub rule_engine: RuleEngine,
-    pub connection_tracker: ConnectionTracker,
-    pub rate_limiter: RateLimiter,
-    pub scan_detector: ScanDetector,
+    pub connection_tracker: Arc<ConnectionTracker>,
+    pub rate_limiter: Arc<RateLimiter>,
+    pub scan_detector: Arc<ScanDetector>,
     pub metrics: ArgusMetrics,
     pub event_bus: LiveEventBus,
     pub auth_config: AuthConfig,
@@ -390,9 +390,9 @@ async fn try_main() -> anyhow::Result<()> {
         };
 
     let rule_engine = RuleEngine::new(store);
-    let connection_tracker = ConnectionTracker::new(65536, 30);
-    let rate_limiter = RateLimiter::new(100.0, 10.0);
-    let scan_detector = ScanDetector::new();
+    let connection_tracker = Arc::new(ConnectionTracker::new(65536, 30));
+    let rate_limiter = Arc::new(RateLimiter::new(100.0, 10.0));
+    let scan_detector = Arc::new(ScanDetector::new());
     let metrics = ArgusMetrics::new();
     let event_bus = LiveEventBus::new(1024);
     let audit_log = AuditLog::new();
@@ -499,6 +499,30 @@ async fn try_main() -> anyhow::Result<()> {
         argus_core::scheduler::start_scheduler(scheduler_engine.into()).await;
     });
     info!("Scheduler background task started");
+
+    // Background GC tasks for engine memory cleanup
+    let conn_tracker = state.connection_tracker.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            conn_tracker.gc();
+        }
+    });
+    let rate_limiter = state.rate_limiter.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            rate_limiter.gc();
+        }
+    });
+    let scan_detector = state.scan_detector.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            scan_detector.gc();
+        }
+    });
+    info!("GC background tasks started");
 
     let app = app(state);
 

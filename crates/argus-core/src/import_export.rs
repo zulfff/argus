@@ -125,24 +125,5 @@ impl RuleExport {
 }
 
 fn validate_cidr(cidr: &str) -> Result<(), String> {
-    let parts: Vec<&str> = cidr.split('/').collect();
-    if parts.len() != 2 {
-        return Err(format!("Invalid CIDR format: {}", cidr));
-    }
-    let ip: std::net::IpAddr = parts[0]
-        .parse()
-        .map_err(|_| format!("Invalid IP in CIDR: {}", cidr))?;
-    let prefix: u32 = parts[1]
-        .parse()
-        .map_err(|_| format!("Invalid prefix in CIDR: {}", cidr))?;
-    match ip {
-        std::net::IpAddr::V4(_) if prefix > 32 => {
-            return Err(format!("IPv4 prefix must be <= 32, got {}", prefix));
-        }
-        std::net::IpAddr::V6(_) if prefix > 128 => {
-            return Err(format!("IPv6 prefix must be <= 128, got {}", prefix));
-        }
-        _ => {}
-    }
-    Ok(())
+    argus_common::net::validate_cidr(cidr)
 }

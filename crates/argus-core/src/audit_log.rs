@@ -5,6 +5,8 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 use uuid::Uuid;
 
+use argus_common::audit::compute_audit_hash;
+
 const MAX_LOG_ENTRIES: usize = 100_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,15 +93,15 @@ impl AuditLog {
         details: &str,
         previous_hash: &str,
     ) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(id.as_bytes());
-        hasher.update(timestamp.to_rfc3339().as_bytes());
-        hasher.update(actor.as_bytes());
-        hasher.update(action.as_bytes());
-        hasher.update(resource.as_bytes());
-        hasher.update(details.as_bytes());
-        hasher.update(previous_hash.as_bytes());
-        hex::encode(hasher.finalize())
+        compute_audit_hash(
+            id,
+            timestamp,
+            actor,
+            action,
+            resource,
+            details,
+            previous_hash,
+        )
     }
 
     pub fn verify_integrity(&self) -> VerificationResult {
