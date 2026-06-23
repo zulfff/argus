@@ -3,7 +3,6 @@ use axum::{
     extract::{Path, State},
     Extension, Json,
 };
-use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing::warn;
 
@@ -13,7 +12,6 @@ use serde::{Deserialize, Serialize};
 
 pub async fn login(
     State(state): State<Arc<AppState>>,
-    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<TokenResponse>, (StatusCode, Json<serde_json::Value>)> {
     let user = state
@@ -24,15 +22,14 @@ pub async fn login(
         .ok_or_else(|| {
             warn!(
                 username = %req.username,
-                ip = %addr.ip(),
                 "Failed login attempt"
             );
             state.audit_log.log(
                 &req.username,
                 "login.failed",
                 "auth",
-                &format!("Failed login from {}", addr.ip()),
-                Some(&addr.ip().to_string()),
+                "Failed login attempt",
+                None,
                 false,
             );
             (
@@ -60,7 +57,7 @@ pub async fn login(
         "login.success",
         "auth",
         "Successful login",
-        Some(&addr.ip().to_string()),
+        None,
         true,
     );
 

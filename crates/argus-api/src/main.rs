@@ -648,10 +648,7 @@ async fn try_main() -> anyhow::Result<()> {
 
             axum_server::bind_rustls(addr, config)
                 .handle(handle)
-                .serve(
-                    app.clone()
-                        .into_make_service_with_connect_info::<std::net::SocketAddr>(),
-                )
+                .serve(app.clone().into_make_service())
                 .await
                 .map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
         }
@@ -670,12 +667,9 @@ async fn try_main() -> anyhow::Result<()> {
             eprintln!("  Set ARGUS_TLS_CERT and ARGUS_TLS_KEY env vars for TLS");
             eprintln!("  ========================================");
             eprintln!();
-            axum::serve(
-                listener,
-                app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
-            )
-            .with_graceful_shutdown(shutdown_signal())
-            .await?;
+            axum::serve(listener, app)
+                .with_graceful_shutdown(shutdown_signal())
+                .await?;
         }
     }
 
