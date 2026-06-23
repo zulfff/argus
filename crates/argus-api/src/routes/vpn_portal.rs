@@ -26,6 +26,28 @@ pub async fn submit_request(
             serde_json::json!({"error": "Insufficient permissions", "code": 403}),
         ));
     }
+    // Validate WireGuard public key format (44-char base64)
+    let key = payload.public_key.trim();
+    if key.len() != 44
+        || !key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
+    {
+        return Err(Json(
+            serde_json::json!({"error": "Invalid WireGuard public key format", "code": 400}),
+        ));
+    }
+    // Validate allowed_ips CIDRs
+    if !payload.allowed_ips.is_empty() {
+        for ip_str in payload.allowed_ips.split(',') {
+            let trimmed = ip_str.trim();
+            if !trimmed.is_empty() && argus_common::net::validate_cidr(trimmed).is_err() {
+                return Err(Json(
+                    serde_json::json!({"error": format!("Invalid CIDR in allowed_ips: {}", trimmed), "code": 400}),
+                ));
+            }
+        }
+    }
     let req = state.vpn_portal.submit_request(
         &payload.user_id,
         &payload.public_key,

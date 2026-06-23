@@ -13,7 +13,7 @@ use axum_extra::{
 };
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -29,7 +29,7 @@ fn hash_password(password: &str) -> Result<String, String> {
         .map(|h| h.to_string())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
     pub username: String,
@@ -40,6 +40,17 @@ pub struct Claims {
     pub iss: String,
     pub aud: String,
     pub jti: String,
+}
+
+impl std::fmt::Debug for Claims {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Claims")
+            .field("sub", &self.sub)
+            .field("username", &self.username)
+            .field("role", &self.role)
+            .field("exp", &self.exp)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -80,7 +91,7 @@ impl std::fmt::Display for Role {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct User {
     pub id: Uuid,
     pub username: String,
@@ -89,13 +100,34 @@ pub struct User {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl std::fmt::Debug for User {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("User")
+            .field("id", &self.id)
+            .field("username", &self.username)
+            .field("password_hash", &"[REDACTED]")
+            .field("role", &self.role)
+            .field("enabled", &self.enabled)
+            .finish()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl std::fmt::Debug for LoginRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoginRequest")
+            .field("username", &self.username)
+            .field("password", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TokenResponse {
     pub access_token: String,
     pub refresh_token: String,
@@ -104,9 +136,29 @@ pub struct TokenResponse {
     pub role: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl std::fmt::Debug for TokenResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TokenResponse")
+            .field("access_token", &"[REDACTED]")
+            .field("refresh_token", &"[REDACTED]")
+            .field("token_type", &self.token_type)
+            .field("expires_in", &self.expires_in)
+            .field("role", &self.role)
+            .finish()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct RefreshRequest {
     pub refresh_token: String,
+}
+
+impl std::fmt::Debug for RefreshRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RefreshRequest")
+            .field("refresh_token", &"[REDACTED]")
+            .finish()
+    }
 }
 
 pub struct UserStore {
@@ -257,6 +309,8 @@ impl Default for UserStore {
 pub struct JwtAuth {
     encoding_key: EncodingKey,
     decoding_key: DecodingKey,
+    used_refresh_tokens: Arc<std::sync::Mutex<HashSet<String>>>,
+    revoked_families: Arc<std::sync::Mutex<HashSet<String>>>,
 }
 
 impl JwtAuth {
@@ -264,6 +318,8 @@ impl JwtAuth {
         Self {
             encoding_key: EncodingKey::from_secret(secret),
             decoding_key: DecodingKey::from_secret(secret),
+            used_refresh_tokens: Arc::new(std::sync::Mutex::new(HashSet::new())),
+            revoked_families: Arc::new(std::sync::Mutex::new(HashSet::new())),
         }
     }
 
@@ -333,6 +389,35 @@ impl JwtAuth {
     pub fn refresh_access_token(&self, refresh_token: &str) -> Result<TokenResponse, String> {
         let claims = self.validate_token(refresh_token)?;
 
+        // Check token family (sub) has not been revoked
+        {
+            let revoked = match self.revoked_families.lock() {
+                Ok(f) => f,
+                Err(_) => return Err("internal error".to_string()),
+            };
+            if revoked.contains(&claims.sub) {
+                return Err("token family revoked".to_string());
+            }
+        }
+
+        // Check for refresh token reuse
+        {
+            let mut used = match self.used_refresh_tokens.lock() {
+                Ok(u) => u,
+                Err(_) => return Err("internal error".to_string()),
+            };
+            if used.contains(&claims.jti) {
+                // Reuse detected — revoke entire family
+                let mut revoked = match self.revoked_families.lock() {
+                    Ok(r) => r,
+                    Err(_) => return Err("internal error".to_string()),
+                };
+                revoked.insert(claims.sub.clone());
+                return Err("refresh token reused — family revoked".to_string());
+            }
+            used.insert(claims.jti.clone());
+        }
+
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|e| format!("time error: {}", e))?
@@ -375,6 +460,14 @@ impl JwtAuth {
             expires_in: ACCESS_TOKEN_EXPIRY_SECS,
             role: claims.role.to_string(),
         })
+    }
+
+    pub fn gc_token_families(&self) {
+        if let Ok(mut used) = self.used_refresh_tokens.lock() {
+            if used.len() > 100_000 {
+                used.clear();
+            }
+        }
     }
 }
 

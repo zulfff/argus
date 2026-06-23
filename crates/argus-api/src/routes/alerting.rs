@@ -36,10 +36,18 @@ impl From<AlertRule> for AlertRuleResponse {
 
 pub async fn list_alert_rules(
     State(state): State<Arc<AppState>>,
-    Extension(_claims): Extension<Claims>,
-) -> Json<Vec<AlertRuleResponse>> {
+    Extension(claims): Extension<Claims>,
+) -> Result<Json<Vec<AlertRuleResponse>>, (StatusCode, Json<serde_json::Value>)> {
+    if !claims.role.can_read() {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
+    }
     let rules = state.alert_manager.list_rules();
-    Json(rules.into_iter().map(AlertRuleResponse::from).collect())
+    Ok(Json(
+        rules.into_iter().map(AlertRuleResponse::from).collect(),
+    ))
 }
 
 #[derive(Deserialize)]
@@ -72,6 +80,27 @@ pub async fn create_alert_rule(
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
         ));
+    }
+
+    if req.name.is_empty() || req.name.len() > 256 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Name must be 1-256 characters", "code": 400})),
+        ));
+    }
+
+    // Validate notification channel URLs block SSRF
+    for channel in &req.channels {
+        for key in &["url", "webhook_url"] {
+            if let Some(url) = channel.config.get(key).and_then(|v| v.as_str()) {
+                validate_notification_url(url).map_err(|msg| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({"error": msg, "code": 400})),
+                    )
+                })?;
+            }
+        }
     }
 
     let rule = AlertRule {
@@ -112,17 +141,29 @@ pub async fn delete_alert_rule(
 
 pub async fn list_alert_history(
     State(state): State<Arc<AppState>>,
-    Extension(_claims): Extension<Claims>,
-) -> Json<Vec<AlertEvent>> {
+    Extension(claims): Extension<Claims>,
+) -> Result<Json<Vec<AlertEvent>>, (StatusCode, Json<serde_json::Value>)> {
+    if !claims.role.can_read() {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
+    }
     let history = state.alert_manager.list_history(100);
-    Json(history)
+    Ok(Json(history))
 }
 
 pub async fn acknowledge_alert(
     State(state): State<Arc<AppState>>,
-    Extension(_claims): Extension<Claims>,
+    Extension(claims): Extension<Claims>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    if !claims.role.can_write() {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
+    }
     if state.alert_manager.acknowledge(&id) {
         Ok(Json(serde_json::json!({"acknowledged": id.to_string()})))
     } else {
@@ -131,4 +172,48 @@ pub async fn acknowledge_alert(
             Json(serde_json::json!({"error": "Alert event not found", "code": 404})),
         ))
     }
+}
+
+fn validate_notification_url(url: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
+
+    match parsed.scheme() {
+        "https" => {}
+        "http" => {}
+        _ => {
+            return Err(format!(
+                "URL scheme must be http or https, got: {}",
+                parsed.scheme()
+            ))
+        }
+    }
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "URL has no host".to_string())?;
+
+    // Block loopback
+    if host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" {
+        return Err("URL pointing to loopback interface is not allowed".to_string());
+    }
+
+    // Block AWS/cloud metadata endpoints
+    let lowered = host.to_lowercase();
+    if lowered == "169.254.169.254" || lowered.ends_with(".compute.internal") {
+        return Err("URL pointing to cloud metadata is not allowed".to_string());
+    }
+
+    // Block RFC 1918 private IPv4 ranges
+    if let Ok(addr) = host.parse::<std::net::Ipv4Addr>() {
+        let octets = addr.octets();
+        if octets[0] == 10
+            || (octets[0] == 172 && (16..=31).contains(&octets[1]))
+            || (octets[0] == 192 && octets[1] == 168)
+            || octets[0] == 127
+        {
+            return Err("URL pointing to private IP range is not allowed".to_string());
+        }
+    }
+
+    Ok(())
 }

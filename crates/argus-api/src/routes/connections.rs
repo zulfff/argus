@@ -1,3 +1,4 @@
+use axum::http::StatusCode;
 use axum::{extract::State, Extension, Json};
 use serde::Serialize;
 use std::sync::Arc;
@@ -18,8 +19,14 @@ pub struct ConnectionResponse {
 
 pub async fn list_connections(
     State(state): State<Arc<AppState>>,
-    Extension(_claims): Extension<Claims>,
-) -> Json<Vec<ConnectionResponse>> {
+    Extension(claims): Extension<Claims>,
+) -> Result<Json<Vec<ConnectionResponse>>, (StatusCode, Json<serde_json::Value>)> {
+    if !claims.role.can_read() {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
+    }
     let entries = state.connection_tracker.list_all();
     let resp: Vec<ConnectionResponse> = entries
         .into_iter()
@@ -40,5 +47,5 @@ pub async fn list_connections(
             }
         })
         .collect();
-    Json(resp)
+    Ok(Json(resp))
 }

@@ -1,10 +1,12 @@
+use axum::http::StatusCode;
 use axum::{
     extract::{Query, State},
-    Json,
+    Extension, Json,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::auth::Claims;
 use crate::AppState;
 
 #[derive(Deserialize, Default)]
@@ -60,28 +62,56 @@ pub struct VerifyResponse {
 
 pub async fn list_audit(
     State(state): State<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
     Query(query): Query<AuditQuery>,
-) -> Json<Vec<AuditEntryResponse>> {
+) -> Result<Json<Vec<AuditEntryResponse>>, (StatusCode, Json<serde_json::Value>)> {
+    if !claims.role.can_read() {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
+    }
     let entries = state.audit_log.query(
         query.actor.as_deref(),
         query.action.as_deref(),
         query.limit.min(1000),
     );
-    Json(entries.into_iter().map(AuditEntryResponse::from).collect())
+    Ok(Json(
+        entries.into_iter().map(AuditEntryResponse::from).collect(),
+    ))
 }
 
-pub async fn verify_audit(State(state): State<Arc<AppState>>) -> Json<VerifyResponse> {
+pub async fn verify_audit(
+    State(state): State<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
+) -> Result<Json<VerifyResponse>, (StatusCode, Json<serde_json::Value>)> {
+    if !claims.role.can_read() {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
+    }
     let result = state.audit_log.verify_integrity();
-    Json(VerifyResponse {
+    Ok(Json(VerifyResponse {
         valid: result.valid,
         tampered_count: result.tampered_count,
         total_entries: result.total_entries,
         first_broken_at: result.first_broken_at,
-    })
+    }))
 }
 
-pub async fn export_audit(State(state): State<Arc<AppState>>) -> impl axum::response::IntoResponse {
+pub async fn export_audit(
+    State(state): State<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
+) -> Result<impl axum::response::IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     use axum::http::{header, HeaderMap, HeaderValue};
+
+    if !claims.role.can_read() {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
+    }
 
     let json = state.audit_log.export_json();
     let fname = format!(
@@ -99,5 +129,5 @@ pub async fn export_audit(State(state): State<Arc<AppState>>) -> impl axum::resp
         HeaderValue::from_str(&fname).unwrap(),
     );
 
-    (headers, json)
+    Ok((headers, json))
 }

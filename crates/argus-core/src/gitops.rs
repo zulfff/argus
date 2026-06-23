@@ -137,9 +137,15 @@ impl GitOpsEngine {
             return CiStatus::Skipped;
         };
 
-        let result = StdCommand::new("sh")
-            .arg("-c")
-            .arg(ci_cmd)
+        // Split into program + args, avoiding shell injection
+        let parts: Vec<&str> = ci_cmd.split_whitespace().collect();
+        let (program, args) = match parts.first() {
+            Some(p) => (*p, &parts[1..]),
+            None => return CiStatus::Skipped,
+        };
+
+        let result = StdCommand::new(program)
+            .args(args)
             .env("GIT_COMMIT", &change.commit_hash)
             .current_dir(&self.repo_path)
             .output();

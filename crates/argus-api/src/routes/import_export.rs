@@ -8,8 +8,18 @@ use argus_core::import_export::RuleExport;
 
 pub async fn export_json(
     State(state): State<Arc<AppState>>,
-    Extension(_claims): Extension<Claims>,
+    Extension(claims): Extension<Claims>,
 ) -> impl IntoResponse {
+    if !claims.role.can_read() {
+        return (
+            StatusCode::FORBIDDEN,
+            [
+                (header::CONTENT_TYPE, "application/json"),
+                (header::CONTENT_DISPOSITION, ""),
+            ],
+            serde_json::json!({"error": "Insufficient permissions", "code": 403}).to_string(),
+        );
+    }
     let rules = state
         .rule_engine
         .store()
@@ -42,8 +52,18 @@ pub async fn export_json(
 
 pub async fn export_yaml(
     State(state): State<Arc<AppState>>,
-    Extension(_claims): Extension<Claims>,
+    Extension(claims): Extension<Claims>,
 ) -> impl IntoResponse {
+    if !claims.role.can_read() {
+        return (
+            StatusCode::FORBIDDEN,
+            [
+                (header::CONTENT_TYPE, "application/json"),
+                (header::CONTENT_DISPOSITION, ""),
+            ],
+            serde_json::json!({"error": "Insufficient permissions", "code": 403}).to_string(),
+        );
+    }
     let rules = state
         .rule_engine
         .store()
@@ -76,8 +96,18 @@ pub async fn export_yaml(
 
 pub async fn export_csv(
     State(state): State<Arc<AppState>>,
-    Extension(_claims): Extension<Claims>,
+    Extension(claims): Extension<Claims>,
 ) -> impl IntoResponse {
+    if !claims.role.can_read() {
+        return (
+            StatusCode::FORBIDDEN,
+            [
+                (header::CONTENT_TYPE, "application/json"),
+                (header::CONTENT_DISPOSITION, ""),
+            ],
+            serde_json::json!({"error": "Insufficient permissions", "code": 403}).to_string(),
+        );
+    }
     let rules = state
         .rule_engine
         .store()

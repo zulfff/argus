@@ -59,10 +59,18 @@ fn default_schedule_enabled() -> bool {
 
 pub async fn list_schedules(
     State(state): State<Arc<AppState>>,
-    Extension(_claims): Extension<Claims>,
-) -> Json<Vec<ScheduleResponse>> {
+    Extension(claims): Extension<Claims>,
+) -> Result<Json<Vec<ScheduleResponse>>, (StatusCode, Json<serde_json::Value>)> {
+    if !claims.role.can_read() {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
+    }
     let schedules = state.scheduler_engine.list_schedules().await;
-    Json(schedules.into_iter().map(ScheduleResponse::from).collect())
+    Ok(Json(
+        schedules.into_iter().map(ScheduleResponse::from).collect(),
+    ))
 }
 
 pub async fn create_schedule(

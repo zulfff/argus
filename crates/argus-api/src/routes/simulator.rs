@@ -8,10 +8,16 @@ use argus_core::simulator::{SimulationRequest, Simulator};
 
 pub async fn simulate_rule(
     State(state): State<Arc<AppState>>,
-    Extension(_claims): Extension<Claims>,
+    Extension(claims): Extension<Claims>,
     Json(req): Json<SimulationRequest>,
 ) -> Result<Json<argus_core::simulator::SimulationResponse>, (StatusCode, Json<serde_json::Value>)>
 {
+    if !claims.role.can_read() {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
+    }
     let simulator = Simulator::new(state.rule_engine.store().clone());
 
     match simulator.simulate(&req).await {
