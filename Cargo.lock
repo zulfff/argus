@@ -233,6 +233,7 @@ dependencies = [
  "uuid",
  "wasmparser 0.218.1",
  "wasmtime",
+ "wat",
 ]
 
 [[package]]

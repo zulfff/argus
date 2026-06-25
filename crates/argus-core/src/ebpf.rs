@@ -33,7 +33,7 @@ fn cidr_to_lpm_key_v4(cidr: &str) -> Result<Key<u32>> {
             cidr
         )));
     }
-    Ok(Key::new(prefix_len, u32::from(v4).to_be()))
+    Ok(Key::new(prefix_len, u32::from(v4)))
 }
 
 fn map_name_for_action(action: &Action) -> &'static str {
@@ -98,7 +98,7 @@ impl EbpfController {
             .map_err(|e| ArgusError::External(format!("LpmTrie from ALLOWLIST: {}", e)))?;
 
         allowlist
-            .insert(&Key::new(32, 0u32.to_be()), 1, 0)
+            .insert(&Key::new(32, 0u32), 1, 0)
             .map_err(|e| {
                 ArgusError::External(format!("insert allowlist mode marker: {}", e))
             })?;
@@ -222,7 +222,7 @@ mod tests {
     fn test_cidr_to_lpm_key_v4() {
         let key = cidr_to_lpm_key_v4("10.0.0.0/8").unwrap();
         assert_eq!(key.prefix_len(), 8);
-        let expected = u32::from(Ipv4Addr::new(10, 0, 0, 0)).to_be();
+        let expected = u32::from(Ipv4Addr::new(10, 0, 0, 0));
         assert_eq!(key.data(), expected);
 
         let key = cidr_to_lpm_key_v4("192.168.1.0/24").unwrap();
@@ -250,5 +250,19 @@ mod tests {
         let ctrl = EbpfController::new();
         assert!(!ctrl.loaded);
         assert!(ctrl.wan_iface.is_none());
+    }
+
+    #[test]
+    fn test_byte_order_consistency_userspace_vs_ebpf() {
+        let ip = Ipv4Addr::new(10, 0, 0, 1);
+        let userspace_data = u32::from(ip);
+        let ebpf_bytes = [10u8, 0, 0, 1];
+        let ebpf_data = u32::from_be_bytes(ebpf_bytes);
+        assert_eq!(
+            userspace_data, ebpf_data,
+            "Byte-order mismatch: userspace={:#010x} ebpf={:#010x}",
+            userspace_data, ebpf_data
+        );
+        assert_eq!(userspace_data, 0x0A000001);
     }
 }

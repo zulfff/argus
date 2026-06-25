@@ -432,7 +432,7 @@ async fn try_main() -> anyhow::Result<()> {
         };
 
     let rule_engine = RuleEngine::new(store);
-    let connection_tracker = Arc::new(ConnectionTracker::new(65536, 30));
+    let mut connection_tracker = Arc::new(ConnectionTracker::new(65536, 30));
     let rate_limiter = Arc::new(RateLimiter::new(100.0, 10.0));
     let scan_detector = Arc::new(ScanDetector::new());
     let metrics = ArgusMetrics::new();
@@ -452,6 +452,29 @@ async fn try_main() -> anyhow::Result<()> {
     let ztna_mesh = Arc::new(ZtnaMesh::new("default"));
     let anomaly_detector = Arc::new(AnomalyDetector::new());
     let wasm_plugin_engine = Arc::new(argus_core::wasm_plugin::WasmPluginEngine::new());
+
+    if let Some(ct) = Arc::get_mut(&mut connection_tracker) {
+        let wasm_engine = wasm_plugin_engine.clone();
+        ct.set_on_new_connection(move |key| {
+            let metadata = argus_core::wasm_plugin::FlowMetadata {
+                src_ip: key.src_ip.to_string(),
+                dst_ip: key.dst_ip.to_string(),
+                src_port: key.src_port,
+                dst_port: key.dst_port,
+                protocol: key.protocol,
+                direction: "unknown".into(),
+                interface: "unknown".into(),
+                rule_action: None,
+                rule_id: None,
+                timestamp: chrono::Utc::now(),
+                tags: std::collections::HashMap::new(),
+            };
+            wasm_engine.run_hook(
+                argus_core::wasm_plugin::HookPoint::OnConnectionNew,
+                &metadata,
+            );
+        });
+    }
 
     let mut ebpf_controller = EbpfController::new();
     let ebf_obj_path = std::env::var("ARGUS_EBPF_OBJECT")

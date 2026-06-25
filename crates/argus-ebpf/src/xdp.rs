@@ -38,8 +38,8 @@ unsafe fn try_argus_firewall(ctx: XdpContext) -> Result<u32, u32> {
 
     let ip_hdr = &*((data + ETH_HDR_LEN) as *const Ipv4Hdr);
 
-    let src_ip = ip_hdr.src_addr;
-    let dst_ip = ip_hdr.dst_addr;
+    let src_ip = u32::from_be_bytes(ip_hdr.src_addr);
+    let dst_ip = u32::from_be_bytes(ip_hdr.dst_addr);
     let protocol = ip_hdr.proto;
 
     if let Some(packets_ptr) = PER_CPU_PACKETS.get_ptr_mut(0) {

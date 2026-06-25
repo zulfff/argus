@@ -5,10 +5,13 @@ use std::net::IpAddr;
 use std::sync::Mutex;
 use tracing::instrument;
 
+pub type NewConnectionCallback = Box<dyn Fn(&ConnectionKey) + Send + Sync>;
+
 pub struct ConnectionTracker {
     connections: Mutex<HashMap<ConnectionKey, ConnectionEntry>>,
     max_entries: usize,
     gc_interval_secs: u64,
+    on_new_connection: Option<NewConnectionCallback>,
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
@@ -26,7 +29,15 @@ impl ConnectionTracker {
             connections: Mutex::new(HashMap::with_capacity(max_entries.min(65536))),
             max_entries,
             gc_interval_secs,
+            on_new_connection: None,
         }
+    }
+
+    pub fn set_on_new_connection<F>(&mut self, callback: F)
+    where
+        F: Fn(&ConnectionKey) + Send + Sync + 'static,
+    {
+        self.on_new_connection = Some(Box::new(callback));
     }
 
     #[instrument(skip(self))]
@@ -62,6 +73,10 @@ impl ConnectionTracker {
                     bytes_out: 0,
                 },
             );
+            drop(conns);
+            if let Some(ref callback) = self.on_new_connection {
+                callback(&key);
+            }
         }
     }
 

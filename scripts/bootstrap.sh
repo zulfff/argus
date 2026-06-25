@@ -74,6 +74,24 @@ cargo install cargo-geiger --locked
 echo "=== Verifying eBPF tooling ==="
 bpftool version || echo "WARNING: bpftool not found, eBPF programs cannot be loaded"
 
+# eBPF build requirements
+echo "=== eBPF build setup ==="
+if ! rustup toolchain list | grep -q nightly; then
+    echo "Installing nightly toolchain for eBPF compilation..."
+    rustup toolchain install nightly --component rust-src || \
+        echo "WARNING: Could not install nightly — eBPF object won't compile"
+fi
+if ! rustup +nightly target list --installed | grep -q bpfel-unknown-none; then
+    echo "Adding bpfel-unknown-none target (may require -Z build-std)..."
+    rustup +nightly target add bpfel-unknown-none 2>/dev/null || \
+        echo "NOTE: bpfel-unknown-none target not available as prebuilt — will use -Z build-std=core"
+fi
+if ! command -v bpf-linker &>/dev/null; then
+    cargo +nightly install bpf-linker 2>/dev/null || \
+        echo "NOTE: bpf-linker not installed — aya uses it for linking eBPF objects"
+fi
+echo "eBPF build command: cargo +nightly build --release -p argus-ebpf --target bpfel-unknown-none -Z build-std=core"
+
 # Verify Rust toolchain
 echo "=== Verifying Rust toolchain ==="
 rustc --version

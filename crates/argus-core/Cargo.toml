@@ -28,3 +28,6 @@ aya = "0.12"
 [features]
 default = []
 wasm = ["wasmtime", "wasmparser"]
+
+[dev-dependencies]
+wat = "1"

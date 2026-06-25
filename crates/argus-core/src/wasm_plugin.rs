@@ -180,9 +180,10 @@ impl WasmPluginEngine {
 
     fn execute_plugin(&self, plugin: &WasmPlugin, metadata: &FlowMetadata) -> Result<PluginOutput> {
         let mut config = wasmtime::Config::new();
-        config.epoch_interruption(true);
-        config.cranelift_nan_canonicalization(true);
         config.consume_fuel(true);
+        // ponytail: epoch_interruption would add infinite-loop protection but
+        // requires periodic Engine::increment_epoch() calls from a background
+        // thread — enable when adding a global epoch ticker.
         let engine = wasmtime::Engine::new(&config)
         .map_err(|e| ArgusError::Internal(format!("wasmtime engine: {}", e)))?;
 
@@ -203,60 +204,101 @@ impl WasmPluginEngine {
         let mut linker = wasmtime::Linker::new(&engine);
 
         linker
-            .func_wrap("env", "log", |msg_ptr: i32, msg_len: i32| {
-                // INCOMPLETE: Host-side log function should read from WASM linear memory.
-                // Currently only prints placeholder. Upgrade path: use Caller to access
-                // memory and read the actual log message bytes.
-                println!("WASM plugin log (ptr={}, len={})", msg_ptr, msg_len);
-            })
+            .func_wrap(
+                "env",
+                "log",
+                |mut caller: wasmtime::Caller<'_, ()>, msg_ptr: i32, msg_len: i32| {
+                    if msg_len <= 0 || msg_ptr < 0 {
+                        return;
+                    }
+                    let Some(mem) = caller
+                        .get_export("memory")
+                        .and_then(|e| e.into_memory())
+                    else {
+                        return;
+                    };
+                    let mut buf = vec![0u8; msg_len as usize];
+                    if mem.read(&caller, msg_ptr as usize, &mut buf).is_err() {
+                        return;
+                    }
+                    if let Ok(s) = std::str::from_utf8(&buf) {
+                        tracing::info!(target: "wasm_plugin", "{}", s);
+                    }
+                },
+            )
             .map_err(|e| ArgusError::Internal(format!("linker setup: {}", e)))?;
 
         let instance = linker
             .instantiate(&mut store, &module)
             .map_err(|e| ArgusError::External(format!("WASM instantiate: {}", e)))?;
 
-        let mut output = PluginOutput {
-            action: PluginAction::Continue,
-            annotations: HashMap::new(),
-            tags: Vec::new(),
+        let memory = instance
+            .get_memory(&mut store, "memory")
+            .ok_or_else(|| {
+                ArgusError::Validation("WASM plugin must export 'memory'".into())
+            })?;
+
+        let alloc_fn = instance
+            .get_typed_func::<i32, i32>(&mut store, "alloc")
+            .map_err(|_| {
+                ArgusError::Validation("WASM plugin must export 'alloc(i32) -> i32'".into())
+            })?;
+
+        let process_fn = instance
+            .get_typed_func::<(i32, i32), i32>(&mut store, "process")
+            .map_err(|_| {
+                ArgusError::Validation(
+                    "WASM plugin must export 'process(i32, i32) -> i32'".into(),
+                )
+            })?;
+
+        let mdata_len = metadata_json.len() as i32;
+        let mdata_ptr = if mdata_len > 0 {
+            let ptr = alloc_fn
+                .call(&mut store, mdata_len)
+                .map_err(|e| ArgusError::External(format!("WASM alloc failed: {}", e)))?;
+            memory
+                .write(&mut store, ptr as usize, &metadata_json)
+                .map_err(|e| ArgusError::External(format!("memory write: {}", e)))?;
+            ptr
+        } else {
+            0
         };
 
-        if let Ok(process_fn) = instance
-            .get_typed_func::<(i32, i32), i32>(&mut store, "process")
-        {
-            let memory = instance
-                .get_memory(&mut store, "memory")
-                .ok_or_else(|| ArgusError::Internal("WASM module has no exported memory".into()))?;
+        let result_code = process_fn
+            .call(&mut store, (mdata_ptr, mdata_len))
+            .map_err(|e| ArgusError::External(format!("WASM process failed: {}", e)))?;
 
-            let mdata_len = metadata_json.len() as i32;
-            let mdata_ptr = if mdata_len > 0 {
-                // INCOMPLETE: should call module's alloc function to get memory.
-                // Currently hardcodes offset 1024 which works for simple modules.
-                // Upgrade path: call exported "alloc" function, or use a properly
-                // negotiated memory layout via the canonical ABI.
-                memory
-                    .write(&mut store, 1024, &metadata_json)
-                    .map_err(|e| ArgusError::External(format!("memory write: {}", e)))?;
-                1024i32
-            } else {
-                0i32
-            };
-
-            let result = process_fn
-                .call(&mut store, (mdata_ptr, mdata_len))
-                .map_err(|e| ArgusError::External(format!("WASM call: {}", e)))?;
-
-            if result == 1 {
-                output.action = PluginAction::Redirect {
-                    reason: "plugin redirected".into(),
-                };
-            } else if result == 2 {
-                output.action = PluginAction::Alert {
+        let output = match result_code {
+            0 => PluginOutput {
+                action: PluginAction::Continue,
+                annotations: HashMap::new(),
+                tags: Vec::new(),
+            },
+            1 => PluginOutput {
+                action: PluginAction::Redirect {
+                    reason: format!("plugin '{}' redirected", plugin.name),
+                },
+                annotations: HashMap::new(),
+                tags: Vec::new(),
+            },
+            2 => PluginOutput {
+                action: PluginAction::Alert {
                     severity: "warning".into(),
-                    message: "plugin raised alert".into(),
-                };
+                    message: format!("plugin '{}' raised alert", plugin.name),
+                },
+                annotations: HashMap::new(),
+                tags: Vec::new(),
+            },
+            code => {
+                tracing::warn!(plugin=%plugin.name, code, "unknown WASM return code");
+                PluginOutput {
+                    action: PluginAction::Continue,
+                    annotations: HashMap::new(),
+                    tags: Vec::new(),
+                }
             }
-        }
+        };
 
         Ok(output)
     }
@@ -340,5 +382,63 @@ mod tests {
             &[HookPoint::OnRuleMatch, HookPoint::OnAlertGenerated],
         );
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_wasm_plugin_end_to_end_real_module() {
+        let wat = r#"
+(module
+  (memory (export "memory") 1)
+  (func (export "alloc") (param i32) (result i32)
+    i32.const 2048
+  )
+  (func (export "process") (param i32 i32) (result i32)
+    i32.const 2
+  )
+)
+"#;
+        let wasm_bytes = wat::parse_str(wat).expect("WAT compilation failed");
+
+        let engine = WasmPluginEngine::new();
+        engine
+            .load_plugin(
+                "end-to-end-test",
+                "1.0.0",
+                "End-to-end test plugin",
+                vec![HookPoint::OnConnectionNew],
+                serde_json::json!({"threshold": 100}),
+                wasm_bytes,
+            )
+            .expect("plugin load failed");
+
+        let metadata = FlowMetadata {
+            src_ip: "10.0.0.1".into(),
+            dst_ip: "8.8.8.8".into(),
+            src_port: 54321,
+            dst_port: 443,
+            protocol: 6,
+            direction: "outbound".into(),
+            interface: "eth0".into(),
+            rule_action: None,
+            rule_id: None,
+            timestamp: chrono::Utc::now(),
+            tags: HashMap::new(),
+        };
+
+        let outputs = engine.run_hook(HookPoint::OnConnectionNew, &metadata);
+        assert!(!outputs.is_empty(), "expected at least one plugin output");
+        assert!(
+            matches!(outputs[0].action, PluginAction::Alert { .. }),
+            "expected Alert action, got: {:?}",
+            outputs[0].action
+        );
+
+        let plugins = engine.list_plugins();
+        assert_eq!(plugins.len(), 1);
+
+        engine
+            .unload_plugin("end-to-end-test/1.0.0")
+            .expect("plugin unload failed");
+        assert!(engine.list_plugins().is_empty());
     }
 }
