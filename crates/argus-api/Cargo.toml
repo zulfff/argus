@@ -5,8 +5,9 @@ edition.workspace = true
 
 [dependencies]
 argus-common = { path = "../argus-common" }
-argus-core = { path = "../argus-core" }
+argus-core = { path = "../argus-core", features = ["wasm"] }
 argus-observability = { path = "../argus-observability" }
+argus-orchestrator = { path = "../argus-orchestrator" }
 axum.workspace = true
 tokio.workspace = true
 tower.workspace = true

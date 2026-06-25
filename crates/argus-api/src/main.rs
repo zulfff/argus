@@ -16,6 +16,7 @@ use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
 use tracing::{error, info, warn};
 
 use argus_core::alerting::AlertManager;
+use argus_core::anomaly::AnomalyDetector;
 use argus_core::audit_log::AuditLog;
 use argus_core::backup::BackupManager;
 use argus_core::cluster::ClusterManager;
@@ -28,9 +29,13 @@ use argus_core::reputation::ReputationManager;
 use argus_core::rule_engine::RuleEngine;
 use argus_core::scanner::ScanDetector;
 use argus_core::scheduler::SchedulerEngine;
+use argus_core::ebpf::EbpfController;
 use argus_core::syslog::SyslogForwarder;
 use argus_core::tenancy::TenantManager;
 use argus_core::vpn_portal::VpnPortalManager;
+use argus_core::ztna::ZtnaMesh;
+use argus_orchestrator::drift::DriftDetector;
+use argus_orchestrator::netbox::NetboxClient;
 use argus_observability::metrics::ArgusMetrics;
 
 use crate::auth::{AuthConfig, Role};
@@ -47,7 +52,7 @@ pub struct AppState {
     pub event_bus: LiveEventBus,
     pub auth_config: AuthConfig,
     pub audit_log: Arc<AuditLog>,
-    pub alert_manager: AlertManager,
+    pub alert_manager: Arc<AlertManager>,
     pub tenant_manager: TenantManager,
     pub cluster_manager: ClusterManager,
     pub reputation_manager: ReputationManager,
@@ -61,6 +66,12 @@ pub struct AppState {
     pub db_audit_store: Option<Arc<PostgresAuditStore>>,
     pub db_connection_store: Option<Arc<PostgresConnectionStore>>,
     pub backup_manager: BackupManager,
+    pub ebpf_controller: EbpfController,
+    pub netbox_client: Option<Arc<NetboxClient>>,
+    pub drift_detector: Option<Arc<DriftDetector>>,
+    pub ztna_mesh: Arc<ZtnaMesh>,
+    pub anomaly_detector: Arc<AnomalyDetector>,
+    pub wasm_plugin_engine: Arc<argus_core::wasm_plugin::WasmPluginEngine>,
 }
 
 pub fn app(state: Arc<AppState>) -> Router {
@@ -305,6 +316,34 @@ pub fn app(state: Arc<AppState>) -> Router {
             "/api/v1/backup/download",
             axum::routing::get(routes::backup::download_backup),
         )
+        .route(
+            "/api/v1/orchestrator/drift",
+            axum::routing::get(routes::orchestrator::get_drift_status),
+        )
+        .route(
+            "/api/v1/orchestrator/reconcile",
+            axum::routing::post(routes::orchestrator::trigger_reconciliation),
+        )
+        .route(
+            "/api/v1/orchestrator/devices",
+            axum::routing::get(routes::orchestrator::get_netbox_devices),
+        )
+        .route(
+            "/api/v1/anomaly/baseline",
+            axum::routing::get(routes::anomaly::get_baseline),
+        )
+        .route(
+            "/api/v1/anomaly/alerts",
+            axum::routing::get(routes::anomaly::get_anomaly_alerts),
+        )
+        .route(
+            "/api/v1/ztna/peers",
+            axum::routing::get(routes::ztna::list_ztna_peers),
+        )
+        .route(
+            "/api/v1/ztna/config/{iface}",
+            axum::routing::get(routes::ztna::download_wg_config),
+        )
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             middleware::auth_middleware,
@@ -399,7 +438,7 @@ async fn try_main() -> anyhow::Result<()> {
     let metrics = ArgusMetrics::new();
     let event_bus = LiveEventBus::new(1024);
     let audit_log = Arc::new(AuditLog::new());
-    let alert_manager = AlertManager::new();
+    let alert_manager = Arc::new(AlertManager::new());
     let tenant_manager = TenantManager::new();
     let cluster_manager = ClusterManager::new(uuid::Uuid::new_v4());
     let reputation_manager = ReputationManager::new();
@@ -410,6 +449,45 @@ async fn try_main() -> anyhow::Result<()> {
     let compliance = ComplianceEngine::new();
     let syslog = SyslogForwarder::new();
     let backup_manager = BackupManager::new();
+    let ztna_mesh = Arc::new(ZtnaMesh::new("default"));
+    let anomaly_detector = Arc::new(AnomalyDetector::new());
+    let wasm_plugin_engine = Arc::new(argus_core::wasm_plugin::WasmPluginEngine::new());
+
+    let mut ebpf_controller = EbpfController::new();
+    let ebf_obj_path = std::env::var("ARGUS_EBPF_OBJECT")
+        .unwrap_or_else(|_| "/var/lib/argus/argus-ebpf.o".into());
+    if let Ok(wan_iface) = std::env::var("ARGUS_WAN_IFACE") {
+        if let Err(e) = ebpf_controller.init(&ebf_obj_path, &wan_iface) {
+            warn!("eBPF init failed: {} — eBPF data plane disabled", e);
+        }
+    } else {
+        info!("ARGUS_WAN_IFACE not set — eBPF data plane not loaded (set ARGUS_WAN_IFACE and ARGUS_EBPF_OBJECT to enable)");
+    }
+
+    let (netbox_client, drift_detector) =
+        match (std::env::var("NETBOX_URL"), std::env::var("NETBOX_TOKEN")) {
+            (Ok(url), Ok(token)) if !url.is_empty() && !token.is_empty() => {
+                info!("NETBOX_URL and NETBOX_TOKEN set, initializing orchestrator");
+                let nb = Arc::new(NetboxClient::new(url, token));
+                let dd = Arc::new(DriftDetector::new(nb.clone(), 300));
+                if let Ok(vyos_addr) = std::env::var("VYOS_ADDRESS") {
+                    let addr_clone = vyos_addr.clone();
+                    dd.register_device(
+                        "vyos-primary".into(),
+                        vyos_addr,
+                        std::env::var("VYOS_PORT").ok().and_then(|p| p.parse().ok()),
+                    )
+                    .await;
+                    info!("VyOS device registered: {}", addr_clone);
+                }
+                (Some(nb), Some(dd))
+            }
+            _ => {
+                info!("NETBOX_URL/NETBOX_TOKEN not both set — orchestrator disabled");
+                (None, None)
+            }
+        };
+
     info!("Engines initialized");
 
     let db_pool = if let Ok(db_url) = std::env::var("DATABASE_URL") {
@@ -534,6 +612,12 @@ async fn try_main() -> anyhow::Result<()> {
         db_audit_store: db_audit_store.clone(),
         db_connection_store: db_connection_store.clone(),
         backup_manager,
+        ebpf_controller,
+        netbox_client,
+        drift_detector,
+        ztna_mesh,
+        anomaly_detector: anomaly_detector.clone(),
+        wasm_plugin_engine,
     });
 
     let scheduler_engine = state.scheduler_engine.clone();
@@ -565,6 +649,50 @@ async fn try_main() -> anyhow::Result<()> {
         }
     });
     info!("GC background tasks started");
+
+    let anomaly_detector_bg = anomaly_detector.clone();
+    let conn_tracker_bg = state.connection_tracker.clone();
+    let alert_manager_bg = state.alert_manager.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            let conn_count = conn_tracker_bg.active_count();
+            let sample = argus_core::anomaly::TrafficSample {
+                timestamp: chrono::Utc::now(),
+                packets_per_second: 0.0,
+                bytes_per_second: 0.0,
+                connection_count: conn_count as u64,
+                unique_ports: 0,
+            };
+            anomaly_detector_bg.record_sample("all-interfaces", sample);
+            anomaly_detector_bg.compute_baseline("all-interfaces");
+            let current = argus_core::anomaly::TrafficSample {
+                timestamp: chrono::Utc::now(),
+                packets_per_second: 0.0,
+                bytes_per_second: 0.0,
+                connection_count: conn_count as u64,
+                unique_ports: 0,
+            };
+            let alerts = anomaly_detector_bg.check_anomalies("all-interfaces", &current);
+            if !alerts.is_empty() {
+                let mut snapshot = argus_core::alerting::SystemSnapshot {
+                    blocked_ips: 0,
+                    active_connections: conn_count,
+                    packets_per_second: 0,
+                    anomaly_score: alerts.first().map(|a| a.deviation_multiple).unwrap_or(0.0),
+                    cpu_usage_percent: 0.0,
+                    memory_usage_percent: 0.0,
+                    audit_tampered: false,
+                    wan_failed_over: false,
+                    rule_match_counts: std::collections::HashMap::new(),
+                };
+                snapshot.anomaly_score = alerts.iter().map(|a| a.deviation_multiple).fold(0.0, f64::max);
+                alert_manager_bg.evaluate(&snapshot).await;
+            }
+            anomaly_detector_bg.gc();
+        }
+    });
+    info!("Anomaly detection background task started");
 
     // Background Postgres audit log sync
     if let Some(ref pg_audit) = db_audit_store {

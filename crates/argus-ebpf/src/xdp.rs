@@ -1,5 +1,6 @@
 use aya_ebpf::bindings::xdp_action;
 use aya_ebpf::macros::xdp;
+use aya_ebpf::maps::lpm_trie::Key;
 use aya_ebpf::programs::XdpContext;
 use network_types::{
     eth::{EthHdr, EtherType},
@@ -23,9 +24,6 @@ pub fn argus_firewall(ctx: XdpContext) -> u32 {
 
 #[inline(always)]
 unsafe fn try_argus_firewall(ctx: XdpContext) -> Result<u32, u32> {
-    // SAFETY: data/end pointers are set by the kernel's XDP dispatcher and
-    // are valid for the duration of the program. Bounds checks below ensure
-    // we never read past data_end.
     let data = ctx.data();
     let data_end = ctx.data_end();
 
@@ -33,37 +31,32 @@ unsafe fn try_argus_firewall(ctx: XdpContext) -> Result<u32, u32> {
         return Ok(xdp_action::XDP_PASS);
     }
 
-    // SAFETY: pointer is within [data, data_end) bounds verified above.
-    // Ethernet header is 14 bytes, always valid in any XDP packet.
     let eth_hdr = &*(data as *const EthHdr);
     if eth_hdr.ether_type != EtherType::Ipv4 {
         return Ok(xdp_action::XDP_PASS);
     }
 
-    // SAFETY: pointer is within verified bounds — offset is ETH_HDR_LEN,
-    // and we checked data + ETH_HDR_LEN + IPV4_HDR_LEN <= data_end above.
     let ip_hdr = &*((data + ETH_HDR_LEN) as *const Ipv4Hdr);
 
-    let src_ip = u32::from_be(ip_hdr.src_addr);
-    let dst_ip = u32::from_be(ip_hdr.dst_addr);
+    let src_ip = ip_hdr.src_addr;
+    let dst_ip = ip_hdr.dst_addr;
     let protocol = ip_hdr.proto;
 
-    // SAFETY: PerCpuArray access from XDP runs in NAPI softirq with
-    // preemption disabled — no concurrent access on the same CPU.
-    if let Ok(Some(packets_ptr)) = PER_CPU_PACKETS.get_ptr_mut(0) {
+    if let Some(packets_ptr) = PER_CPU_PACKETS.get_ptr_mut(0) {
         core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::Relaxed);
         *packets_ptr = (*packets_ptr).wrapping_add(1);
     }
 
-    if BLOCKLIST.get(&src_ip).is_ok_and(|v| v.is_some()) {
+    let lookup_key = Key::new(32, src_ip);
+    if BLOCKLIST.get(&lookup_key).is_some() {
         return Ok(xdp_action::XDP_DROP);
     }
 
-    let allowlist_reserved = ALLOWLIST.get(&0u32);
-    if allowlist_reserved.is_ok_and(|v| v.is_some()) {
-        let in_allowlist = ALLOWLIST.get(&src_ip).is_ok_and(|v| v.is_some());
-        let in_blocklist = BLOCKLIST.get(&src_ip).is_ok_and(|v| v.is_some());
-        if !in_allowlist && !in_blocklist {
+    let allowlist_reserved = Key::new(32, 0);
+    if ALLOWLIST.get(&allowlist_reserved).is_some() {
+        if ALLOWLIST.get(&lookup_key).is_none()
+            && BLOCKLIST.get(&lookup_key).is_none()
+        {
             return Ok(xdp_action::XDP_DROP);
         }
     }
@@ -78,7 +71,6 @@ unsafe fn try_argus_firewall(ctx: XdpContext) -> Result<u32, u32> {
             if data + tcp_off + core::mem::size_of::<TcpHdr>() > data_end {
                 return Ok(xdp_action::XDP_PASS);
             }
-            // SAFETY: bounds checked above.
             let tcp_hdr = &*((data + tcp_off) as *const TcpHdr);
             let src_port = u16::from_be(tcp_hdr.source);
             let dst_port = u16::from_be(tcp_hdr.dest);
@@ -89,7 +81,6 @@ unsafe fn try_argus_firewall(ctx: XdpContext) -> Result<u32, u32> {
             if data + udp_off + core::mem::size_of::<UdpHdr>() > data_end {
                 return Ok(xdp_action::XDP_PASS);
             }
-            // SAFETY: bounds checked above.
             let udp_hdr = &*((data + udp_off) as *const UdpHdr);
             let src_port = u16::from_be(udp_hdr.source);
             let dst_port = u16::from_be(udp_hdr.dest);
@@ -110,23 +101,20 @@ fn check_rate_limit(src_ip: u32) -> bool {
 
     let bucket = unsafe {
         match RATE_LIMIT_BUCKETS.get_ptr_mut(&src_ip) {
-            Ok(Some(ptr)) => ptr,
-            _ => {
+            Some(ptr) => ptr,
+            None => {
                 let _ = RATE_LIMIT_BUCKETS.insert(&src_ip, &MAX_TOKENS, 0);
                 return true;
             }
         }
     };
 
-    // SAFETY: the bucket pointer is valid as long as this BPF program
-    // holds the reference. XDP programs on the same CPU are serialized.
     let mut value = unsafe { *bucket };
     let tokens = value & 0xFFFFFFFF;
     let last_refill = value >> 32;
 
     if now_ns >= last_refill + REFILL_INTERVAL_NS {
         let new_val = (now_ns << 32) | MAX_TOKENS;
-        // SAFETY: valid mutable pointer to BPF map value.
         unsafe { *bucket = new_val };
         return true;
     }
@@ -136,7 +124,6 @@ fn check_rate_limit(src_ip: u32) -> bool {
     }
 
     let new_val = (last_refill << 32) | (tokens.saturating_sub(1));
-    // SAFETY: valid mutable pointer to BPF map value.
     unsafe { *bucket = new_val };
     true
 }

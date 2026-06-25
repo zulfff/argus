@@ -1,4 +1,5 @@
 pub mod alerting;
+pub mod anomaly;
 pub mod audit;
 pub mod auth_routes;
 pub mod backup;
@@ -9,6 +10,7 @@ pub mod connections;
 pub mod dpi;
 pub mod import_export;
 pub mod metrics;
+pub mod orchestrator;
 pub mod qos;
 pub mod reputation;
 pub mod rules;
@@ -18,3 +20,4 @@ pub mod stats;
 pub mod syslog;
 pub mod tenants;
 pub mod vpn_portal;
+pub mod ztna;

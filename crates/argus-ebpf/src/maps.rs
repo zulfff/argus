@@ -1,11 +1,11 @@
 use aya_ebpf::macros::map;
-use aya_ebpf::maps::{HashMap, PerCpuArray, PerfEventArray};
+use aya_ebpf::maps::{HashMap, LpmTrie, PerCpuArray, PerfEventArray};
 
 #[map]
-pub static BLOCKLIST: HashMap<u32, u32> = HashMap::with_max_entries(65536, 0);
+pub static BLOCKLIST: LpmTrie<u32, u32> = LpmTrie::with_max_entries(65536, 0);
 
 #[map]
-pub static ALLOWLIST: HashMap<u32, u32> = HashMap::with_max_entries(65536, 0);
+pub static ALLOWLIST: LpmTrie<u32, u32> = LpmTrie::with_max_entries(65536, 0);
 
 #[map]
 pub static CONNTRACK: HashMap<u64, u32> = HashMap::with_max_entries(262144, 0);

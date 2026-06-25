@@ -4,6 +4,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tracing::error;
 use uuid::Uuid;
 
 use crate::auth::Claims;
@@ -184,6 +185,15 @@ pub async fn create_rule(
         .await
         .map_err(|e| Json(serde_json::json!({"error": e.to_string()})))?;
 
+    if let Err(e) = state.ebpf_controller.sync_rule_create(&created) {
+        error!("eBPF sync failed for rule {} ({}): {}", created.id, created.name, e);
+        return Err(Json(serde_json::json!({
+            "error": format!("Rule created in store but eBPF sync failed: {}", e),
+            "rule_id": created.id.to_string(),
+            "code": 500
+        })));
+    }
+
     Ok(Json(RuleResponse::from(created)))
 }
 
@@ -236,6 +246,15 @@ pub async fn update_rule(
         .await
         .map_err(|e| Json(serde_json::json!({"error": e.to_string()})))?;
 
+    if let Err(e) = state.ebpf_controller.sync_rule_update(&existing, &rule) {
+        error!("eBPF sync failed for rule update {} ({}): {}", rule.id, rule.name, e);
+        return Err(Json(serde_json::json!({
+            "error": format!("Rule updated in store but eBPF sync failed: {}", e),
+            "rule_id": rule.id.to_string(),
+            "code": 500
+        })));
+    }
+
     Ok(Json(RuleResponse::from(rule)))
 }
 
@@ -250,12 +269,25 @@ pub async fn delete_rule(
         ));
     }
 
+    let rule_to_delete = state
+        .rule_engine
+        .store()
+        .get_rule(&id)
+        .await
+        .ok();
+
     state
         .rule_engine
         .store()
         .delete_rule(&id)
         .await
-        .unwrap_or_default();
+        .map_err(|e| Json(serde_json::json!({"error": e.to_string()})))?;
+
+    if let Some(ref rule) = rule_to_delete {
+        if let Err(e) = state.ebpf_controller.sync_rule_delete(rule) {
+            error!("eBPF sync failed for rule deletion {}: {}", id, e);
+        }
+    }
 
     Ok(Json(serde_json::json!({"deleted": id.to_string()})))
 }

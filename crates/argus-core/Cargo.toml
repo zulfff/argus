@@ -23,6 +23,8 @@ ipnetwork.workspace = true
 wasmtime = { version = "28", optional = true }
 wasmparser = { version = "0.218", optional = true }
 
+aya = "0.12"
+
 [features]
 default = []
 wasm = ["wasmtime", "wasmparser"]

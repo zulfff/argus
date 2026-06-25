@@ -12,19 +12,19 @@ routers, and full observability — all in Rust, all memory-safe.
 
 ## Features
 
-- **eBPF/XDP Firewall** — line-rate packet filtering (CIDR allow/deny, token-bucket rate limiting, stateful connection tracking, port-scan detection)
-- **Router Automation** — NetBox source-of-truth → VyOS config reconciliation via Ansible + Event-Driven Ansible, drift detection, auto-rollback
+- **eBPF/XDP Firewall** — LPM-trie CIDR allow/deny (requires nightly + `bpfel-unknown-none` to compile, `ARGUS_WAN_IFACE` to load), token-bucket rate limiting, connection tracking, port-scan detection
+- **Router Automation** — NetBox source-of-truth → VyOS config reconciliation (env: `NETBOX_URL`, `NETBOX_TOKEN`, `VYOS_ADDRESS`), drift detection
 - **Observability** — Prometheus metrics, Loki structured logging, Grafana dashboard
 - **Web Dashboard** — Custom cyberpunk/terminal SvelteKit UI (not Tailwind, not AI-generated) with live stats, rule builder, connection tracker
 - **CLI + TUI** — clap CLI + ratatui live terminal monitor
 - **Auth + RBAC** — JWT (HS256, iss/aud/nbf, 5s leeway), Admin/Operator/Viewer roles, auto-wired middleware on all routes
-- **Statistical Anomaly Detection** — statistical baseline computation (z-score), on-box, no cloud dependency
+- **Statistical Anomaly Detection** — statistical baseline computation (z-score), background polling from connection tracker, on-box, no cloud dependency
 - **Threat Intelligence** — auto-sync Spamhaus DROP/EDROP + AbuseIPDB
 - **GitOps** — firewall rules in Git, CI validation, auto-apply
-- **ZTNA Mesh** — WireGuard overlay with identity-aware policy engine
-- **WASM Plugin** — wasmtime sandbox, fuel-metered, metadata-only access
+- **ZTNA Mesh** — WireGuard config generator + identity-aware policy engine (config download via API; live WireGuard interface management not yet wired)
+- **WASM Plugin** — wasmtime sandbox, fuel-metered, metadata passed to plugin (hardcoded memory offset; alloc-based memory negotiation upcoming)
 - **Audit Log** — SHA-256 hash-chained, tamper-evident, integrity verification
-- **Multi-WAN Failover** — health-probe based, auto-failback
+- **Multi-WAN Failover** — health-probe based, auto-failback (configured via VyOS, not yet API-driven)
 
 ## Quick Start
 
@@ -77,10 +77,21 @@ curl -X POST http://127.0.0.1:8443/api/v1/auth/login \
 
 ### Enable eBPF data plane
 ```bash
+# Requires nightly Rust + bpfel-unknown-none target (may need -Z build-std)
 rustup toolchain install nightly
-rustup target add --toolchain nightly bpfel-unknown-none
+rustup +nightly target add bpfel-unknown-none
 cargo +nightly build --release -p argus-ebpf
+
+# Copy object and set env vars
+sudo cp target/bpfel-unknown-none/release/argus-ebpf /var/lib/argus/argus-ebpf.o
+export ARGUS_WAN_IFACE=eth0
+export ARGUS_EBPF_OBJECT=/var/lib/argus/argus-ebpf.o
+cargo run --release -p argus-api
 ```
+
+> **Note:** eBPF compilation requires nightly toolchain with the `bpfel-unknown-none` target.
+> If the target is unavailable (some environments cannot build it), the server starts with
+> eBPF data plane disabled — firewall rules still work via userspace `rule_engine.rs`.
 
 ## Environment Variables
 
@@ -92,6 +103,12 @@ cargo +nightly build --release -p argus-ebpf
 | `RUST_LOG` | No | `argus=info` | Log level filter |
 | `DATABASE_URL` | No | — | PostgreSQL (optional, in-memory default) |
 | `REDIS_URL` | No | — | Redis (optional) |
+| `ARGUS_WAN_IFACE` | No | — | Interface for eBPF XDP attach (e.g. `eth0`). Requires `ARGUS_EBPF_OBJECT` |
+| `ARGUS_EBPF_OBJECT` | No | `/var/lib/argus/argus-ebpf.o` | Path to compiled eBPF .o file |
+| `NETBOX_URL` | No | — | NetBox API base URL (enables orchestrator) |
+| `NETBOX_TOKEN` | No | — | NetBox API token (required with `NETBOX_URL`) |
+| `VYOS_ADDRESS` | No | — | VyOS router address for drift detection |
+| `VYOS_PORT` | No | `443` | VyOS API port |
 
 > **Without `ARGUS_JWT_SECRET` ≥ 32 bytes, the server refuses to start.** No fallback, no hardcoded secret.
 

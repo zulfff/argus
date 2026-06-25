@@ -6,6 +6,7 @@ pub mod cluster;
 pub mod compliance;
 pub mod connection_tracker;
 pub mod dpi;
+pub mod ebpf;
 pub mod gitops;
 pub mod import_export;
 pub mod multi_wan;

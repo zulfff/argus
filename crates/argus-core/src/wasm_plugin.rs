@@ -17,7 +17,7 @@ pub struct WasmPlugin {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum HookPoint {
     OnPacketIngress,
     OnPacketEgress,
@@ -29,7 +29,7 @@ pub enum HookPoint {
     OnConfigChange,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct FlowMetadata {
     pub src_ip: String,
     pub dst_ip: String,
@@ -81,7 +81,7 @@ impl WasmPluginEngine {
         config: serde_json::Value,
         wasm_bytes: Vec<u8>,
     ) -> Result<()> {
-        let validator = wasmparser::Validator::new();
+        let mut validator = wasmparser::Validator::new();
 
         if let Err(e) = validator.validate_all(&wasm_bytes) {
             return Err(ArgusError::Validation(format!(
@@ -179,12 +179,11 @@ impl WasmPluginEngine {
     }
 
     fn execute_plugin(&self, plugin: &WasmPlugin, metadata: &FlowMetadata) -> Result<PluginOutput> {
-        let engine = wasmtime::Engine::new(
-            &wasmtime::Config::new()
-                .epoch_interruption(true)
-                .cranelift_nan_canonicalization(true)
-                .consume_fuel(true),
-        )
+        let mut config = wasmtime::Config::new();
+        config.epoch_interruption(true);
+        config.cranelift_nan_canonicalization(true);
+        config.consume_fuel(true);
+        let engine = wasmtime::Engine::new(&config)
         .map_err(|e| ArgusError::Internal(format!("wasmtime engine: {}", e)))?;
 
         let mut store = wasmtime::Store::new(&engine, ());
@@ -196,18 +195,19 @@ impl WasmPluginEngine {
         let module = wasmtime::Module::new(&engine, &plugin.wasm_bytes)
             .map_err(|e| ArgusError::Validation(format!("WASM module compile: {}", e)))?;
 
-        let metadata_json = serde_json::to_vec(metadata)
-            .map_err(|e| ArgusError::Serialization(format!("metadata serialization: {}", e)))?;
-        let config_json = serde_json::to_vec(&plugin.config)
-            .map_err(|e| ArgusError::Serialization(format!("config serialization: {}", e)))?;
+        let metadata_json =
+            serde_json::to_vec(metadata).map_err(ArgusError::Serialization)?;
+        let _config_json =
+            serde_json::to_vec(&plugin.config).map_err(ArgusError::Serialization)?;
 
         let mut linker = wasmtime::Linker::new(&engine);
 
-        let _result: Vec<u8> = Vec::new();
-
         linker
             .func_wrap("env", "log", |msg_ptr: i32, msg_len: i32| {
-                println!("WASM plugin log");
+                // INCOMPLETE: Host-side log function should read from WASM linear memory.
+                // Currently only prints placeholder. Upgrade path: use Caller to access
+                // memory and read the actual log message bytes.
+                println!("WASM plugin log (ptr={}, len={})", msg_ptr, msg_len);
             })
             .map_err(|e| ArgusError::Internal(format!("linker setup: {}", e)))?;
 
@@ -215,20 +215,50 @@ impl WasmPluginEngine {
             .instantiate(&mut store, &module)
             .map_err(|e| ArgusError::External(format!("WASM instantiate: {}", e)))?;
 
-        if let Some(process_fn) = instance
-            .get_typed_func::<(i32, i32), i32>(&mut store, "process")
-            .ok()
-        {
-            let _ = process_fn
-                .call(&mut store, (0, 0))
-                .map_err(|e| ArgusError::External(format!("WASM call: {}", e)))?;
-        }
-
-        Ok(PluginOutput {
+        let mut output = PluginOutput {
             action: PluginAction::Continue,
             annotations: HashMap::new(),
             tags: Vec::new(),
-        })
+        };
+
+        if let Ok(process_fn) = instance
+            .get_typed_func::<(i32, i32), i32>(&mut store, "process")
+        {
+            let memory = instance
+                .get_memory(&mut store, "memory")
+                .ok_or_else(|| ArgusError::Internal("WASM module has no exported memory".into()))?;
+
+            let mdata_len = metadata_json.len() as i32;
+            let mdata_ptr = if mdata_len > 0 {
+                // INCOMPLETE: should call module's alloc function to get memory.
+                // Currently hardcodes offset 1024 which works for simple modules.
+                // Upgrade path: call exported "alloc" function, or use a properly
+                // negotiated memory layout via the canonical ABI.
+                memory
+                    .write(&mut store, 1024, &metadata_json)
+                    .map_err(|e| ArgusError::External(format!("memory write: {}", e)))?;
+                1024i32
+            } else {
+                0i32
+            };
+
+            let result = process_fn
+                .call(&mut store, (mdata_ptr, mdata_len))
+                .map_err(|e| ArgusError::External(format!("WASM call: {}", e)))?;
+
+            if result == 1 {
+                output.action = PluginAction::Redirect {
+                    reason: "plugin redirected".into(),
+                };
+            } else if result == 2 {
+                output.action = PluginAction::Alert {
+                    severity: "warning".into(),
+                    message: "plugin raised alert".into(),
+                };
+            }
+        }
+
+        Ok(output)
     }
 
     pub fn unload_plugin(&self, plugin_id: &str) -> Result<()> {
@@ -278,7 +308,7 @@ mod tests {
     fn test_plugin_lifecycle() {
         let engine = WasmPluginEngine::new();
 
-        let wasm_bytes = b"\x00asm\x01\x00\x00\x00".to_vec();
+        let wasm_bytes = b"\x00asm\x01\x00\x00\x00\xff".to_vec();
 
         let result = engine.load_plugin(
             "test-plugin",
