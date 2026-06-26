@@ -27,7 +27,7 @@ pub async fn get_stats(
     }
 
     let ebpf_stats = state.ebpf_controller.get_packet_stats().unwrap_or_default();
-    let packets_allowed = ebpf_stats.get(0).copied().unwrap_or(0);
+    let packets_allowed = ebpf_stats.first().copied().unwrap_or(0);
     let packets_dropped = ebpf_stats.get(1).copied().unwrap_or(0);
     let active_connections = state
         .ebpf_controller

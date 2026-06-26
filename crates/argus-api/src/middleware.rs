@@ -27,6 +27,7 @@ pub async fn auth_middleware(
     Ok(next.run(request).await)
 }
 
+#[allow(dead_code)]
 pub fn extract_client_ip(
     headers: &axum::http::HeaderMap,
     addr: Option<SocketAddr>,
