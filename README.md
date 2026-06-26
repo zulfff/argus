@@ -93,6 +93,30 @@ cargo run --release -p argus-api
 > If the target is unavailable (some environments cannot build it), the server starts with
 > eBPF data plane disabled — firewall rules still work via userspace `rule_engine.rs`.
 
+#### Default mode (fail-safe)
+
+By default the eBPF firewall starts in **default-allow** mode: traffic passes
+unless an explicit blocklist rule matches. This prevents an operator from
+being locked out of their own router on first attach.
+
+To enforce **default-deny** (only allowlisted IPs pass), opt in explicitly:
+
+```bash
+# SAFE ORDER OF OPERATIONS:
+# 1. Start with default-allow (ARGUS_EBPF_DEFAULT_MODE unset or "allow")
+# 2. Add allowlist rules INCLUDING your management IP:
+#    POST /api/rules  { "action": "Allow", "src_cidr": "10.0.0.5/32", ... }
+# 3. Verify your management IP is allowlisted:
+#    GET /api/rules
+# 4. Only now switch to default-deny and restart:
+export ARGUS_EBPF_DEFAULT_MODE=deny
+cargo run --release -p argus-api
+```
+
+> **Warning:** Setting `ARGUS_EBPF_DEFAULT_MODE=deny` without first allowlisting
+> your management IP will drop ALL traffic including your SSH session. The
+> server logs a WARN at startup when deny mode is active.
+
 ## Environment Variables
 
 | Variable | Required | Default | Description |
@@ -105,6 +129,7 @@ cargo run --release -p argus-api
 | `REDIS_URL` | No | — | Redis (optional) |
 | `ARGUS_WAN_IFACE` | No | — | Interface for eBPF XDP attach (e.g. `eth0`). Requires `ARGUS_EBPF_OBJECT` |
 | `ARGUS_EBPF_OBJECT` | No | `/var/lib/argus/argus-ebpf.o` | Path to compiled eBPF .o file |
+| `ARGUS_EBPF_DEFAULT_MODE` | No | `allow` | eBPF firewall default mode: `allow` (fail-open, safe for first deploy) or `deny` (fail-closed, only allowlisted IPs pass). **Ensure your management IP is allowlisted before setting `deny`.** |
 | `NETBOX_URL` | No | — | NetBox API base URL (enables orchestrator) |
 | `NETBOX_TOKEN` | No | — | NetBox API token (required with `NETBOX_URL`) |
 | `VYOS_ADDRESS` | No | — | VyOS router address for drift detection |

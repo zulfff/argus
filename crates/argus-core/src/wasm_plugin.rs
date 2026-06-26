@@ -185,7 +185,7 @@ impl WasmPluginEngine {
         // requires periodic Engine::increment_epoch() calls from a background
         // thread — enable when adding a global epoch ticker.
         let engine = wasmtime::Engine::new(&config)
-        .map_err(|e| ArgusError::Internal(format!("wasmtime engine: {}", e)))?;
+            .map_err(|e| ArgusError::Internal(format!("wasmtime engine: {}", e)))?;
 
         let mut store = wasmtime::Store::new(&engine, ());
 
@@ -196,10 +196,8 @@ impl WasmPluginEngine {
         let module = wasmtime::Module::new(&engine, &plugin.wasm_bytes)
             .map_err(|e| ArgusError::Validation(format!("WASM module compile: {}", e)))?;
 
-        let metadata_json =
-            serde_json::to_vec(metadata).map_err(ArgusError::Serialization)?;
-        let _config_json =
-            serde_json::to_vec(&plugin.config).map_err(ArgusError::Serialization)?;
+        let metadata_json = serde_json::to_vec(metadata).map_err(ArgusError::Serialization)?;
+        let _config_json = serde_json::to_vec(&plugin.config).map_err(ArgusError::Serialization)?;
 
         let mut linker = wasmtime::Linker::new(&engine);
 
@@ -211,9 +209,7 @@ impl WasmPluginEngine {
                     if msg_len <= 0 || msg_ptr < 0 {
                         return;
                     }
-                    let Some(mem) = caller
-                        .get_export("memory")
-                        .and_then(|e| e.into_memory())
+                    let Some(mem) = caller.get_export("memory").and_then(|e| e.into_memory())
                     else {
                         return;
                     };
@@ -234,9 +230,7 @@ impl WasmPluginEngine {
 
         let memory = instance
             .get_memory(&mut store, "memory")
-            .ok_or_else(|| {
-                ArgusError::Validation("WASM plugin must export 'memory'".into())
-            })?;
+            .ok_or_else(|| ArgusError::Validation("WASM plugin must export 'memory'".into()))?;
 
         let alloc_fn = instance
             .get_typed_func::<i32, i32>(&mut store, "alloc")
@@ -247,9 +241,7 @@ impl WasmPluginEngine {
         let process_fn = instance
             .get_typed_func::<(i32, i32), i32>(&mut store, "process")
             .map_err(|_| {
-                ArgusError::Validation(
-                    "WASM plugin must export 'process(i32, i32) -> i32'".into(),
-                )
+                ArgusError::Validation("WASM plugin must export 'process(i32, i32) -> i32'".into())
             })?;
 
         let mdata_len = metadata_json.len() as i32;
