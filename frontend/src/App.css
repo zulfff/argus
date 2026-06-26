@@ -60,10 +60,14 @@
 @keyframes modalIn { from { opacity: 0; transform: scale(0.98) translateY(-4px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes toastProgress { from { width: 100%; } to { width: 0%; } }
+@keyframes blob { 0%,100% { transform: translate(0, 0) scale(1); } 33% { transform: translate(30px, -50px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } }
 
 @utility animate-slide-in { animation: slideInRow 0.15s ease-out; }
 @utility animate-fade { animation: fadeSlideIn 0.2s ease-out; }
 @utility animate-live { animation: livePulse 2s infinite; }
+@utility animate-blob { animation: blob 7s infinite; }
+@utility animation-delay-2000 { animation-delay: 2s; }
+@utility animation-delay-4000 { animation-delay: 4s; }
 @utility animate-shimmer { 
   background: linear-gradient(90deg, var(--color-bg-panel) 25%, var(--color-bg-hover) 50%, var(--color-bg-panel) 75%); 
   background-size: 200% 100%; 
