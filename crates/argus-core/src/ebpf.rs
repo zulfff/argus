@@ -36,11 +36,20 @@ fn cidr_to_lpm_key_v4(cidr: &str) -> Result<Key<u32>> {
     Ok(Key::new(prefix_len, u32::from(v4)))
 }
 
-fn map_name_for_action(action: &Action) -> &'static str {
-    match action {
-        Action::Deny => "BLOCKLIST",
-        _ => "ALLOWLIST",
+fn map_name_for_action(action: &Action, is_src: bool) -> &'static str {
+    match (action, is_src) {
+        (Action::Deny, true) => "SRC_BLOCKLIST",
+        (Action::Deny, false) => "DST_BLOCKLIST",
+        _ if is_src => "SRC_ALLOWLIST",
+        _ => "DST_ALLOWLIST",
     }
+}
+
+/// Fail-safe: default-deny only when `ARGUS_EBPF_DEFAULT_MODE=deny` is set
+/// exactly. Anything else (unset, empty, "allow", typos) → fail-open, so a
+/// freshly-attached firewall never locks the operator out of their own box.
+fn default_deny_enabled(env_value: Option<&str>) -> bool {
+    matches!(env_value.map(|v| v.trim().to_ascii_lowercase()).as_deref(), Some("deny"))
 }
 
 impl EbpfController {
@@ -80,7 +89,7 @@ impl EbpfController {
         xdp.attach(wan_iface, XdpFlags::default())
             .map_err(|e| ArgusError::External(format!("XDP attach failed: {}", e)))?;
 
-        self.insert_allowlist_mode_marker(&mut bpf)?;
+        self.insert_allowlist_mode_marker_if_deny(&mut bpf)?;
 
         self.bpf = Some(Mutex::new(bpf));
         self.wan_iface = Some(wan_iface.to_string());
@@ -89,21 +98,32 @@ impl EbpfController {
         Ok(())
     }
 
+    fn insert_allowlist_mode_marker_if_deny(&self, bpf: &mut Bpf) -> Result<()> {
+        if !default_deny_enabled(std::env::var("ARGUS_EBPF_DEFAULT_MODE").ok().as_deref()) {
+            info!("eBPF default-allow mode (fail-open). Set ARGUS_EBPF_DEFAULT_MODE=deny to enforce allowlist.");
+            return Ok(());
+        }
+        warn!("eBPF default-deny mode ACTIVE — only allowlisted IPs will pass. Ensure your management IP is allowlisted BEFORE this point or you may lose access.");
+        self.insert_allowlist_mode_marker(bpf)
+    }
+
     fn insert_allowlist_mode_marker(&self, bpf: &mut Bpf) -> Result<()> {
-        let map_ref = bpf
-            .map_mut("ALLOWLIST")
-            .ok_or_else(|| ArgusError::Internal("ALLOWLIST map not found".into()))?;
+        for name in ["SRC_ALLOWLIST", "DST_ALLOWLIST"] {
+            let map_ref = bpf
+                .map_mut(name)
+                .ok_or_else(|| ArgusError::Internal(format!("{} map not found", name)))?;
 
-        let mut allowlist: LpmTrie<_, u32, u32> = LpmTrie::try_from(map_ref)
-            .map_err(|e| ArgusError::External(format!("LpmTrie from ALLOWLIST: {}", e)))?;
+            let mut allowlist: LpmTrie<_, u32, u32> = LpmTrie::try_from(map_ref)
+                .map_err(|e| ArgusError::External(format!("LpmTrie from {}: {}", name, e)))?;
 
-        allowlist
-            .insert(&Key::new(32, 0u32), 1, 0)
-            .map_err(|e| {
-                ArgusError::External(format!("insert allowlist mode marker: {}", e))
-            })?;
+            allowlist
+                .insert(&Key::new(32, 0u32), 1, 0)
+                .map_err(|e| {
+                    ArgusError::External(format!("insert marker into {}: {}", name, e))
+                })?;
+        }
 
-        info!("Allowlist mode marker inserted into eBPF");
+        info!("Allowlist mode markers inserted into eBPF (SRC_ALLOWLIST + DST_ALLOWLIST)");
         Ok(())
     }
 
@@ -166,10 +186,10 @@ impl EbpfController {
 
     fn sync_rule(&self, bpf: &mut Bpf, rule: &CidrRule, add: bool) -> Result<()> {
         if let Some(ref cidr) = rule.src_cidr {
-            self.sync_cidr(bpf, rule, cidr, add)?;
+            self.sync_cidr(bpf, rule, cidr, true, add)?;
         }
         if let Some(ref cidr) = rule.dst_cidr {
-            self.sync_cidr(bpf, rule, cidr, add)?;
+            self.sync_cidr(bpf, rule, cidr, false, add)?;
         }
         Ok(())
     }
@@ -179,6 +199,7 @@ impl EbpfController {
         bpf: &mut Bpf,
         rule: &CidrRule,
         cidr: &str,
+        is_src: bool,
         add: bool,
     ) -> Result<()> {
         if cidr.contains(':') {
@@ -186,7 +207,7 @@ impl EbpfController {
             return Ok(());
         }
 
-        let name = map_name_for_action(&rule.action);
+        let name = map_name_for_action(&rule.action, is_src);
         let lpm_key = cidr_to_lpm_key_v4(cidr)?;
 
         let map_ref = bpf
@@ -241,8 +262,11 @@ mod tests {
 
     #[test]
     fn test_map_name_for_action() {
-        assert_eq!(map_name_for_action(&Action::Deny), "BLOCKLIST");
-        assert_eq!(map_name_for_action(&Action::Allow), "ALLOWLIST");
+        assert_eq!(map_name_for_action(&Action::Deny, true), "SRC_BLOCKLIST");
+        assert_eq!(map_name_for_action(&Action::Deny, false), "DST_BLOCKLIST");
+        assert_eq!(map_name_for_action(&Action::Allow, true), "SRC_ALLOWLIST");
+        assert_eq!(map_name_for_action(&Action::Allow, false), "DST_ALLOWLIST");
+        assert_eq!(map_name_for_action(&Action::RateLimit { packets_per_second: 10 }, true), "SRC_ALLOWLIST");
     }
 
     #[test]
@@ -250,6 +274,17 @@ mod tests {
         let ctrl = EbpfController::new();
         assert!(!ctrl.loaded);
         assert!(ctrl.wan_iface.is_none());
+    }
+
+    #[test]
+    fn test_default_mode_is_fail_open() {
+        assert!(!default_deny_enabled(None), "unset must be fail-open (allow)");
+        assert!(!default_deny_enabled(Some("")), "empty must be fail-open");
+        assert!(!default_deny_enabled(Some("allow")));
+        assert!(!default_deny_enabled(Some("nonsense")), "typo must be fail-open");
+        assert!(default_deny_enabled(Some("deny")), "explicit deny opt-in");
+        assert!(default_deny_enabled(Some("DENY")), "case-insensitive deny");
+        assert!(default_deny_enabled(Some(" deny ")), "trimmed deny");
     }
 
     #[test]
