@@ -151,15 +151,19 @@ mod tests {
     #[test]
     fn test_self_approval_prevention() {
         let portal = VpnPortalManager::new();
-        
-        let req = portal.submit_request("alice", "ABCD1234567890ABCD1234567890ABCD1234567890AB", "10.0.0.2/32");
+
+        let req = portal.submit_request(
+            "alice",
+            "ABCD1234567890ABCD1234567890ABCD1234567890AB",
+            "10.0.0.2/32",
+        );
         assert_eq!(req.status, VpnPeerStatus::Pending);
         assert_eq!(req.user_id, "alice");
-        
+
         let result = portal.approve(&req.id, "alice");
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Cannot approve your own request");
-        
+
         let requests = portal.list(Some(VpnPeerStatus::Pending));
         assert_eq!(requests.len(), 1);
         assert_eq!(requests[0].status, VpnPeerStatus::Pending);
@@ -168,12 +172,16 @@ mod tests {
     #[test]
     fn test_cross_user_approval_allowed() {
         let portal = VpnPortalManager::new();
-        
-        let req = portal.submit_request("alice", "ABCD1234567890ABCD1234567890ABCD1234567890AB", "10.0.0.2/32");
-        
+
+        let req = portal.submit_request(
+            "alice",
+            "ABCD1234567890ABCD1234567890ABCD1234567890AB",
+            "10.0.0.2/32",
+        );
+
         let result = portal.approve(&req.id, "bob");
         assert!(result.is_ok());
-        
+
         let requests = portal.list(Some(VpnPeerStatus::Approved));
         assert_eq!(requests.len(), 1);
         assert_eq!(requests[0].status, VpnPeerStatus::Approved);
@@ -183,7 +191,7 @@ mod tests {
     fn test_approve_nonexistent_request() {
         let portal = VpnPortalManager::new();
         let fake_id = Uuid::new_v4();
-        
+
         let result = portal.approve(&fake_id, "admin");
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Request not found");
