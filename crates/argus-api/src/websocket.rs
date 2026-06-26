@@ -108,13 +108,29 @@ pub async fn ws_handler(
                 "Authorization header must use Bearer scheme".into(),
             ));
         }
+    } else if let Some(ws_protocol) = headers.get(header::SEC_WEBSOCKET_PROTOCOL) {
+        let protocol_str = ws_protocol.to_str().map_err(|_| {
+            (
+                StatusCode::UNAUTHORIZED,
+                "Invalid Sec-WebSocket-Protocol header".into(),
+            )
+        })?;
+        let parts: Vec<&str> = protocol_str.split(',').map(|s| s.trim()).collect();
+        if parts.len() == 2 && parts[0] == "bearer" {
+            parts[1].to_string()
+        } else {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                "Sec-WebSocket-Protocol must be 'bearer, <token>'".into(),
+            ));
+        }
     } else if let Some(token) = query.token {
-        warn!("WebSocket using deprecated query string authentication. Use Authorization header instead.");
+        warn!("WebSocket using deprecated query string authentication. Use Sec-WebSocket-Protocol header instead.");
         token
     } else {
         return Err((
             StatusCode::UNAUTHORIZED,
-            "Missing token in Authorization header or query parameter".into(),
+            "Missing token in Authorization or Sec-WebSocket-Protocol header".into(),
         ));
     };
 
@@ -124,7 +140,9 @@ pub async fn ws_handler(
         .map_err(|e| (StatusCode::UNAUTHORIZED, format!("Invalid token: {}", e)))?;
 
     let event_bus = state.event_bus.subscribe();
-    Ok(ws.on_upgrade(move |socket| handle_ws(socket, event_bus)))
+    Ok(ws
+        .protocols(["bearer"])
+        .on_upgrade(move |socket| handle_ws(socket, event_bus)))
 }
 
 async fn handle_ws(mut socket: WebSocket, mut rx: broadcast::Receiver<LiveEvent>) {

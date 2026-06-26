@@ -126,7 +126,8 @@ pub async fn export_audit(
     );
     headers.insert(
         header::CONTENT_DISPOSITION,
-        HeaderValue::from_str(&fname).unwrap(),
+        HeaderValue::from_str(&fname)
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment; filename=\"audit.json\"")),
     );
 
     Ok((headers, json))

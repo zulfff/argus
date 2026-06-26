@@ -190,9 +190,9 @@ export function connectWebSocket(handler) {
   if (!accessToken) return () => {};
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const url = `${protocol}//${window.location.host}/api/v1/ws?token=${accessToken}`;
+  const url = `${protocol}//${window.location.host}/api/v1/ws`;
 
-  ws = new WebSocket(url);
+  ws = new WebSocket(url, ['bearer', accessToken]);
 
   ws.onmessage = (event) => {
     try {
