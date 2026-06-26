@@ -177,21 +177,32 @@ pub async fn download_config(
         ));
     }
     let requests = state.vpn_portal.list(None);
-    let peer = requests.iter().find(|r| r.id == id);
-    if let Some(peer) = peer {
-        if !claims.role.can_manage_users() && peer.user_id != claims.username {
-            return Err((
-                StatusCode::FORBIDDEN,
-                Json(
-                    serde_json::json!({"error": "Cannot download config for another user's request", "code": 403}),
-                ),
-            ));
-        }
+    let peer = requests.iter().find(|r| r.id == id).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Request not found or not approved", "code": 404})),
+        )
+    })?;
+
+    if !claims.role.can_manage_users() && peer.user_id != claims.username {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Request not found or not approved", "code": 404})),
+        ));
     }
-    let server_public_key =
-        std::env::var("ARGUS_WG_PUBLIC_KEY").unwrap_or_else(|_| "SERVER_PUBLIC_KEY_BASE64".into());
-    let endpoint =
-        std::env::var("ARGUS_WG_ENDPOINT").unwrap_or_else(|_| "vpn.example.com:51820".into());
+
+    let server_public_key = std::env::var("ARGUS_WG_PUBLIC_KEY").map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "Server configuration incomplete", "code": 500})),
+        )
+    })?;
+    let endpoint = std::env::var("ARGUS_WG_ENDPOINT").map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "Server configuration incomplete", "code": 500})),
+        )
+    })?;
     match state
         .vpn_portal
         .generate_client_config(&id, &server_public_key, &endpoint)

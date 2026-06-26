@@ -218,6 +218,15 @@ pub async fn download_backup(
         })?
     };
 
+    state.audit_log.log(
+        &claims.username,
+        "backup.download",
+        "backup",
+        &format!("Downloaded backup snapshot {}", snapshot.id),
+        None,
+        true,
+    );
+
     let json = serde_json::to_string_pretty(&snapshot).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
