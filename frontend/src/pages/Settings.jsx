@@ -3,13 +3,9 @@ import * as api from '../api.js';
 import { AuthContext } from '../App.jsx';
 import Badge from '../components/Badge.jsx';
 import { Toggle, PageHeader, SkeletonRows, EmptyState, LoadingError, Field } from '../components/Shared.jsx';
+import { inputCls, selectCls, btnCls, primaryCls, dangerCls, cardCls } from '../styles.js';
 
 const TABS = ['general', 'users', 'vpn', 'backup', 'cluster', 'syslog', 'qos'];
-const inputCls = "w-full bg-[var(--color-bg-root)] border border-[var(--color-bg-border)] rounded px-2.5 py-1.5 text-xs text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] hover:border-[var(--color-text-muted)] transition-colors";
-const selectCls = "bg-[var(--color-bg-root)] border border-[var(--color-bg-border)] rounded px-2.5 py-1.5 text-xs text-[var(--color-text)] outline-none cursor-pointer hover:border-[var(--color-text-muted)] transition-colors";
-const btnCls = "inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs rounded bg-[var(--color-bg-elevated)] text-[var(--color-text-sec)] border border-[var(--color-bg-border)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)] transition-all";
-const primaryCls = "inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded bg-[var(--color-green-400)] text-black hover:bg-[var(--color-green-500)] hover:shadow-[0_0_16px_var(--color-green-glow)] transition-all";
-const dangerCls = "inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs rounded bg-[var(--color-red-400)] text-white hover:shadow-[0_0_16px_var(--color-red-glow)] transition-all";
 
 export default function Settings() {
   const auth = useContext(AuthContext);
@@ -55,7 +51,7 @@ export default function Settings() {
       </div>
 
       {tab === 'general' && (
-        <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3.5">
+        <div className={cardCls}>
           <div className="text-[var(--color-text-sec)] text-xs mb-4">⚙️ General Settings</div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Hostname"><input className={inputCls} defaultValue="argus-01" readOnly /></Field>
@@ -68,7 +64,7 @@ export default function Settings() {
       )}
 
       {tab === 'users' && (
-        <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3.5">
+        <div className={cardCls}>
           <div className="text-[var(--color-text-sec)] text-xs mb-3">👥 Users</div>
           <div className="flex gap-2 items-end mb-3 p-3 bg-[var(--color-bg-elevated)] rounded">
             <Field label="Username" style={{ flex: 1 }}><input className={inputCls} value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} /></Field>
@@ -95,7 +91,7 @@ export default function Settings() {
       )}
 
       {tab === 'vpn' && (
-        <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3.5">
+        <div className={cardCls}>
           <div className="text-[var(--color-text-sec)] text-xs mb-3">🔒 VPN Portal — WireGuard Requests</div>
           {loading.vpn ? <SkeletonRows count={3} cols={4} /> : (
             <table className="w-full border-collapse">
@@ -127,7 +123,7 @@ export default function Settings() {
       )}
 
       {tab === 'backup' && (
-        <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3.5">
+        <div className={cardCls}>
           <div className="flex justify-between mb-3">
             <span className="text-[var(--color-text-sec)] text-xs">💾 Backups</span>
             <button className={primaryCls} onClick={createBackup}>Create Backup</button>
@@ -155,7 +151,7 @@ export default function Settings() {
       )}
 
       {tab === 'cluster' && (
-        <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3.5">
+        <div className={cardCls}>
           <div className="text-[var(--color-text-sec)] text-xs mb-3">🌐 Cluster Nodes</div>
           {loading.cluster ? <SkeletonRows count={3} cols={5} /> : (
             <table className="w-full border-collapse">
@@ -184,7 +180,7 @@ export default function Settings() {
       )}
 
       {tab === 'syslog' && (
-        <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3.5">
+        <div className={cardCls}>
           <div className="text-[var(--color-text-sec)] text-xs mb-3">📋 Syslog</div>
           {loading.syslog ? <SkeletonRows count={2} cols={5} /> : (
             <table className="w-full border-collapse">
@@ -208,7 +204,7 @@ export default function Settings() {
       )}
 
       {tab === 'qos' && (
-        <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3.5">
+        <div className={cardCls}>
           <div className="text-[var(--color-text-sec)] text-xs mb-3">⚡ QoS Policies</div>
           {loading.qos ? <SkeletonRows count={2} cols={5} /> : (
             <table className="w-full border-collapse">

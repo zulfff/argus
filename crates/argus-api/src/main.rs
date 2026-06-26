@@ -618,13 +618,7 @@ async fn try_main() -> anyhow::Result<()> {
     let auth_config = AuthConfig::new(jwt_secret);
 
     let admin_user = std::env::var("ARGUS_ADMIN_USER").unwrap_or_else(|_| "admin".into());
-    let admin_pass = std::env::var("ARGUS_ADMIN_PASS").unwrap_or_else(|_| {
-        hex::encode({
-            let mut buf = [0u8; 16];
-            rand::thread_rng().fill_bytes(&mut buf);
-            buf
-        })
-    });
+    let admin_pass = std::env::var("ARGUS_ADMIN_PASS").unwrap_or_else(|_| "123456".into());
 
     let existing = auth_config.user_store.list_users().await;
     if existing.is_empty() {
@@ -897,7 +891,14 @@ async fn try_main() -> anyhow::Result<()> {
             eprintln!("  ARGUS API — http://127.0.0.1:8443");
             eprintln!("  Health:     http://127.0.0.1:8443/health");
             eprintln!("  Admin user: {}", admin_user);
-            eprintln!("  Password:   set via ARGUS_ADMIN_PASS env");
+            eprintln!(
+                "  Password:   {} (default, change in Settings)",
+                if std::env::var("ARGUS_ADMIN_PASS").is_ok() {
+                    "set via ARGUS_ADMIN_PASS"
+                } else {
+                    "123456"
+                }
+            );
             eprintln!("  ========================================");
             eprintln!("  WARNING: No TLS configured — all traffic in cleartext");
             eprintln!("  Set ARGUS_TLS_CERT and ARGUS_TLS_KEY env vars for TLS");
