@@ -1,4 +1,4 @@
-use axum::{extract::State, Extension, Json};
+use axum::{extract::State, http::StatusCode, Extension, Json};
 use base64::Engine;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -21,11 +21,11 @@ pub async fn identify(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
     Json(payload): Json<IdentifyRequest>,
-) -> Result<Json<serde_json::Value>, Json<serde_json::Value>> {
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Err(Json(
+        return Err((StatusCode::FORBIDDEN, Json(
             serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        ));
+        )));
     }
 
     let direction = match payload.direction.as_deref() {

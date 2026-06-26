@@ -1,5 +1,6 @@
 use axum::{
     extract::{Path, State},
+    http::StatusCode,
     Extension, Json,
 };
 use serde::{Deserialize, Serialize};
@@ -75,10 +76,10 @@ pub async fn get_rule(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
     Extension(_claims): Extension<Claims>,
-) -> Result<Json<RuleResponse>, Json<serde_json::Value>> {
+) -> Result<Json<RuleResponse>, (StatusCode, Json<serde_json::Value>)> {
     match state.rule_engine.store().get_rule(&id).await {
         Ok(rule) => Ok(Json(RuleResponse::from(rule))),
-        Err(e) => Err(Json(serde_json::json!({"error": e.to_string()}))),
+        Err(e) => Err((StatusCode::NOT_FOUND, Json(serde_json::json!({"error": e.to_string()})))),
     }
 }
 
@@ -147,18 +148,18 @@ pub async fn create_rule(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
     Json(req): Json<CreateRuleRequest>,
-) -> Result<Json<RuleResponse>, Json<serde_json::Value>> {
+) -> Result<Json<RuleResponse>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_write() {
-        return Err(Json(
+        return Err((StatusCode::FORBIDDEN, Json(
             serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        ));
+        )));
     }
 
-    validate_create_request(&req).map_err(|e| Json(serde_json::json!({"error": e})))?;
+    validate_create_request(&req).map_err(|e| (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": e}))))?;
 
-    let action = parse_action(&req.action).map_err(|e| Json(serde_json::json!({"error": e})))?;
+    let action = parse_action(&req.action).map_err(|e| (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": e}))))?;
     let direction =
-        parse_direction(&req.direction).map_err(|e| Json(serde_json::json!({"error": e})))?;
+        parse_direction(&req.direction).map_err(|e| (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": e}))))?;
 
     let now = chrono::Utc::now();
     let rule = CidrRule {
@@ -183,18 +184,18 @@ pub async fn create_rule(
         .store()
         .create_rule(rule)
         .await
-        .map_err(|e| Json(serde_json::json!({"error": e.to_string()})))?;
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))))?;
 
     if let Err(e) = state.ebpf_controller.sync_rule_create(&created) {
         error!(
             "eBPF sync failed for rule {} ({}): {}",
             created.id, created.name, e
         );
-        return Err(Json(serde_json::json!({
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
             "error": format!("Rule created in store but eBPF sync failed: {}", e),
             "rule_id": created.id.to_string(),
             "code": 500
-        })));
+        }))));
     }
 
     Ok(Json(RuleResponse::from(created)))
@@ -205,25 +206,25 @@ pub async fn update_rule(
     Path(id): Path<Uuid>,
     Extension(claims): Extension<Claims>,
     Json(req): Json<CreateRuleRequest>,
-) -> Result<Json<RuleResponse>, Json<serde_json::Value>> {
+) -> Result<Json<RuleResponse>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_write() {
-        return Err(Json(
+        return Err((StatusCode::FORBIDDEN, Json(
             serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        ));
+        )));
     }
 
-    validate_create_request(&req).map_err(|e| Json(serde_json::json!({"error": e})))?;
+    validate_create_request(&req).map_err(|e| (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": e}))))?;
 
     let existing = state
         .rule_engine
         .store()
         .get_rule(&id)
         .await
-        .map_err(|e| Json(serde_json::json!({"error": e.to_string()})))?;
+        .map_err(|e| (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": e.to_string()}))))?;
 
-    let action = parse_action(&req.action).map_err(|e| Json(serde_json::json!({"error": e})))?;
+    let action = parse_action(&req.action).map_err(|e| (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": e}))))?;
     let direction =
-        parse_direction(&req.direction).map_err(|e| Json(serde_json::json!({"error": e})))?;
+        parse_direction(&req.direction).map_err(|e| (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": e}))))?;
 
     let updated = CidrRule {
         id: existing.id,
@@ -247,18 +248,18 @@ pub async fn update_rule(
         .store()
         .update_rule(updated)
         .await
-        .map_err(|e| Json(serde_json::json!({"error": e.to_string()})))?;
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))))?;
 
     if let Err(e) = state.ebpf_controller.sync_rule_update(&existing, &rule) {
         error!(
             "eBPF sync failed for rule update {} ({}): {}",
             rule.id, rule.name, e
         );
-        return Err(Json(serde_json::json!({
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
             "error": format!("Rule updated in store but eBPF sync failed: {}", e),
             "rule_id": rule.id.to_string(),
             "code": 500
-        })));
+        }))));
     }
 
     Ok(Json(RuleResponse::from(rule)))

@@ -11,7 +11,6 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{debug, warn};
 
-use crate::auth::JwtAuth;
 use crate::AppState;
 
 #[derive(Debug, Clone, Serialize)]
@@ -100,9 +99,9 @@ pub async fn ws_handler(
         )
     })?;
 
-    let jwt = JwtAuth::new(&state.auth_config.jwt_secret);
+    let jwt = &state.auth_config.jwt_auth;
     let _claims = jwt
-        .validate_token(&token)
+        .validate_access_token(&token)
         .map_err(|e| (StatusCode::UNAUTHORIZED, format!("Invalid token: {}", e)))?;
 
     let event_bus = state.event_bus.subscribe();

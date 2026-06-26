@@ -41,6 +41,7 @@ pub struct Claims {
     pub iss: String,
     pub aud: String,
     pub jti: String,
+    pub token_type: String,
 }
 
 impl std::fmt::Debug for Claims {
@@ -96,6 +97,7 @@ impl std::fmt::Display for Role {
 pub struct User {
     pub id: Uuid,
     pub username: String,
+    #[serde(skip_serializing)]
     pub password_hash: String,
     pub role: Role,
     pub enabled: bool,
@@ -340,6 +342,7 @@ impl JwtAuth {
             iss: "argus".into(),
             aud: "argus-api".into(),
             jti: Uuid::new_v4().to_string(),
+            token_type: "access".into(),
         };
 
         let access_token = encode(&Header::default(), &access_claims, &self.encoding_key)
@@ -355,6 +358,7 @@ impl JwtAuth {
             iss: "argus".into(),
             aud: "argus-api".into(),
             jti: Uuid::new_v4().to_string(),
+            token_type: "refresh".into(),
         };
 
         let refresh_token = encode(&Header::default(), &refresh_claims, &self.encoding_key)
@@ -387,8 +391,20 @@ impl JwtAuth {
         Ok(token_data.claims)
     }
 
+    pub fn validate_access_token(&self, token: &str) -> Result<Claims, String> {
+        let claims = self.validate_token(token)?;
+        if claims.token_type != "access" {
+            return Err("not an access token".to_string());
+        }
+        Ok(claims)
+    }
+
     pub fn refresh_access_token(&self, refresh_token: &str) -> Result<TokenResponse, String> {
         let claims = self.validate_token(refresh_token)?;
+
+        if claims.token_type != "refresh" {
+            return Err("not a refresh token".to_string());
+        }
 
         // Check token family (sub) has not been revoked
         {
@@ -434,6 +450,7 @@ impl JwtAuth {
             iss: "argus".into(),
             aud: "argus-api".into(),
             jti: Uuid::new_v4().to_string(),
+            token_type: "access".into(),
         };
 
         let refresh_claims = Claims {
@@ -446,6 +463,7 @@ impl JwtAuth {
             iss: "argus".into(),
             aud: "argus-api".into(),
             jti: Uuid::new_v4().to_string(),
+            token_type: "refresh".into(),
         };
 
         let access_token = encode(&Header::default(), &access_claims, &self.encoding_key)
@@ -568,6 +586,47 @@ mod tests {
         let claims = auth.validate_token(&tokens.access_token).unwrap();
         assert_eq!(claims.username, "admin");
         assert_eq!(claims.role, Role::Admin);
+        assert_eq!(claims.token_type, "access");
+    }
+
+    #[test]
+    fn test_refresh_token_reuse_detected() {
+        let secret = b"test-secret-key-for-jwt-signing-32bytes!!";
+        let auth = JwtAuth::new(secret);
+
+        let user = User {
+            id: Uuid::new_v4(),
+            username: "admin".into(),
+            password_hash: "hash".into(),
+            role: Role::Admin,
+            enabled: true,
+        };
+
+        let tokens = auth.generate_tokens(&user).unwrap();
+
+        let refreshed = auth.refresh_access_token(&tokens.refresh_token).unwrap();
+        assert_eq!(refreshed.role, "admin");
+
+        let reuse_result = auth.refresh_access_token(&tokens.refresh_token);
+        assert!(reuse_result.is_err(), "reused refresh token should be rejected");
+    }
+
+    #[test]
+    fn test_access_token_rejected_as_refresh() {
+        let secret = b"test-secret-key-for-jwt-signing-32bytes!!";
+        let auth = JwtAuth::new(secret);
+
+        let user = User {
+            id: Uuid::new_v4(),
+            username: "admin".into(),
+            password_hash: "hash".into(),
+            role: Role::Admin,
+            enabled: true,
+        };
+
+        let tokens = auth.generate_tokens(&user).unwrap();
+        let result = auth.refresh_access_token(&tokens.access_token);
+        assert!(result.is_err(), "access token should not work as refresh token");
     }
 
     #[test]

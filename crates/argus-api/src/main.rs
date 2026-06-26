@@ -13,6 +13,9 @@ use axum::Router;
 use rand::RngCore;
 use tokio::signal;
 use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
+use tower_http::cors::{Any, CorsLayer};
+use tower_http::limit::RequestBodyLimitLayer;
+use tower_http::set_header::SetResponseHeaderLayer;
 use tracing::{error, info, warn};
 
 use argus_core::alerting::AlertManager;
@@ -83,7 +86,24 @@ pub fn app(state: Arc<AppState>) -> Router {
             .expect("governor config builder failed"),
     );
 
+    let login_governor_config = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(5)
+            .burst_size(10)
+            .finish()
+            .expect("login governor config builder failed"),
+    );
+
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     let protected_routes = Router::new()
+        .route(
+            "/metrics",
+            axum::routing::get(routes::metrics::metrics_handler),
+        )
         .route(
             "/api/v1/auth/users",
             axum::routing::get(routes::auth_routes::list_users),
@@ -353,15 +373,14 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/health", axum::routing::get(|| async { "OK" }))
         .route(
             "/api/v1/auth/login",
-            axum::routing::post(routes::auth_routes::login),
+            axum::routing::post(routes::auth_routes::login)
+                .layer(GovernorLayer {
+                    config: login_governor_config,
+                }),
         )
         .route(
             "/api/v1/auth/refresh",
             axum::routing::post(routes::auth_routes::refresh),
-        )
-        .route(
-            "/metrics",
-            axum::routing::get(routes::metrics::metrics_handler),
         )
         .route("/api/v1/ws", axum::routing::get(websocket::ws_handler))
         .route("/api/v1/openapi.yaml", axum::routing::get(serve_api_spec))
@@ -370,6 +389,16 @@ pub fn app(state: Arc<AppState>) -> Router {
         .layer(GovernorLayer {
             config: governor_config,
         })
+        .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024))
+        .layer(cors)
+        .layer(SetResponseHeaderLayer::if_not_present(
+            axum::http::header::X_CONTENT_TYPE_OPTIONS,
+            axum::http::HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            axum::http::header::X_FRAME_OPTIONS,
+            axum::http::HeaderValue::from_static("DENY"),
+        ))
         .with_state(state)
 }
 
@@ -802,7 +831,7 @@ async fn try_main() -> anyhow::Result<()> {
 
             axum_server::bind_rustls(addr, config)
                 .handle(handle)
-                .serve(app.clone().into_make_service())
+                .serve(app.clone().into_make_service_with_connect_info::<std::net::SocketAddr>())
                 .await
                 .map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
         }
@@ -821,7 +850,7 @@ async fn try_main() -> anyhow::Result<()> {
             eprintln!("  Set ARGUS_TLS_CERT and ARGUS_TLS_KEY env vars for TLS");
             eprintln!("  ========================================");
             eprintln!();
-            axum::serve(listener, app)
+            axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>())
                 .with_graceful_shutdown(shutdown_signal())
                 .await?;
         }

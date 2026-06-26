@@ -1,5 +1,6 @@
 use axum::{
     extract::{Path, State},
+    http::StatusCode,
     Extension, Json,
 };
 use serde::Deserialize;
@@ -22,11 +23,11 @@ pub struct CreatePolicyRequest {
 pub async fn list_policies(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
-) -> Result<Json<Vec<QosPolicy>>, Json<serde_json::Value>> {
+) -> Result<Json<Vec<QosPolicy>>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Err(Json(
+        return Err((StatusCode::FORBIDDEN, Json(
             serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        ));
+        )));
     }
     Ok(Json(state.qos.list_policies()))
 }
@@ -35,11 +36,11 @@ pub async fn create_policy(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
     Json(payload): Json<CreatePolicyRequest>,
-) -> Result<Json<QosPolicy>, Json<serde_json::Value>> {
+) -> Result<Json<QosPolicy>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_write() {
-        return Err(Json(
+        return Err((StatusCode::FORBIDDEN, Json(
             serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        ));
+        )));
     }
     let policy = QosPolicy {
         id: uuid::Uuid::nil(),
@@ -53,7 +54,7 @@ pub async fn create_policy(
     let id = state.qos.add_policy(policy);
     let policies = state.qos.list_policies();
     let created = policies.into_iter().find(|p| p.id == id).ok_or_else(|| {
-        Json(serde_json::json!({"error": "Failed to create policy", "code": 500}))
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Failed to create policy", "code": 500})))
     })?;
     Ok(Json(created))
 }
@@ -62,17 +63,17 @@ pub async fn delete_policy(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
     Path(id): Path<uuid::Uuid>,
-) -> Result<Json<serde_json::Value>, Json<serde_json::Value>> {
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_delete() {
-        return Err(Json(
+        return Err((StatusCode::FORBIDDEN, Json(
             serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        ));
+        )));
     }
     if state.qos.remove_policy(&id) {
         Ok(Json(serde_json::json!({"deleted": id.to_string()})))
     } else {
-        Err(Json(
+        Err((StatusCode::NOT_FOUND, Json(
             serde_json::json!({"error": "Policy not found", "code": 404}),
-        ))
+        )))
     }
 }

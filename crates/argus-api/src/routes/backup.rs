@@ -61,6 +61,18 @@ pub async fn create_backup(
     let tenants = state.tenant_manager.list_tenants();
     let syslog_configs = state.syslog.list_configs();
     let users = state.auth_config.user_store.list_users().await;
+    let users_json: Vec<serde_json::Value> = users
+        .iter()
+        .map(|u| {
+            serde_json::json!({
+                "id": u.id,
+                "username": u.username,
+                "password_hash": u.password_hash,
+                "role": u.role,
+                "enabled": u.enabled,
+            })
+        })
+        .collect();
     let vpn_peers = state.vpn_portal.list(None);
 
     let data = serde_json::json!({
@@ -70,7 +82,7 @@ pub async fn create_backup(
         "qos_policies": qos_policies,
         "tenants": tenants,
         "syslog_configs": syslog_configs,
-        "users": users,
+        "users": users_json,
         "vpn_peers": vpn_peers,
     });
 
@@ -327,8 +339,8 @@ async fn restore_from_snapshot(
         counts.push(format!("{} syslog configs", configs.len()));
     }
 
-    state.auth_config.user_store.clear_users().await;
     if let Some(users) = data.get("users").and_then(|v| v.as_array()) {
+        let mut parsed_users = Vec::new();
         for user_val in users {
             let username = user_val
                 .get("username")
@@ -353,14 +365,18 @@ async fn restore_from_snapshot(
                     username
                 ));
             }
+            parsed_users.push((username.to_string(), password_hash.to_string(), role));
+        }
+        state.auth_config.user_store.clear_users().await;
+        for (username, password_hash, role) in &parsed_users {
             state
                 .auth_config
                 .user_store
-                .restore_user(username, password_hash, role)
+                .restore_user(username, password_hash, role.clone())
                 .await
                 .map_err(|e| format!("Failed to restore user '{}': {}", username, e))?;
         }
-        counts.push(format!("{} users", users.len()));
+        counts.push(format!("{} users", parsed_users.len()));
     }
 
     state.vpn_portal.clear_peers();

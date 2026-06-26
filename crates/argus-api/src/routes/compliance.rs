@@ -1,5 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
+    http::StatusCode,
     Extension, Json,
 };
 use serde::Deserialize;
@@ -24,11 +25,11 @@ pub async fn generate_report(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
     Json(payload): Json<GenerateRequest>,
-) -> Result<Json<ComplianceReport>, Json<serde_json::Value>> {
+) -> Result<Json<ComplianceReport>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_write() {
-        return Err(Json(
+        return Err((StatusCode::FORBIDDEN, Json(
             serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        ));
+        )));
     }
     let report =
         state
@@ -41,11 +42,11 @@ pub async fn list_reports(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
     Query(params): Query<ListParams>,
-) -> Result<Json<Vec<ComplianceReport>>, Json<serde_json::Value>> {
+) -> Result<Json<Vec<ComplianceReport>>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Err(Json(
+        return Err((StatusCode::FORBIDDEN, Json(
             serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        ));
+        )));
     }
     let limit = params.limit.unwrap_or(50);
     Ok(Json(state.compliance.list_reports(limit)))
@@ -55,16 +56,16 @@ pub async fn get_report(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
     Path(id): Path<uuid::Uuid>,
-) -> Result<Json<ComplianceReport>, Json<serde_json::Value>> {
+) -> Result<Json<ComplianceReport>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Err(Json(
+        return Err((StatusCode::FORBIDDEN, Json(
             serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        ));
+        )));
     }
     match state.compliance.get_report(&id) {
         Some(report) => Ok(Json(report)),
-        None => Err(Json(
+        None => Err((StatusCode::NOT_FOUND, Json(
             serde_json::json!({"error": "Report not found", "code": 404}),
-        )),
+        ))),
     }
 }

@@ -6,7 +6,7 @@ use axum::{
 use std::sync::Arc;
 use tracing::warn;
 
-use crate::auth::{Claims, JwtAuth, LoginRequest, RefreshRequest, Role, TokenResponse, User};
+use crate::auth::{Claims, LoginRequest, RefreshRequest, Role, TokenResponse, User};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 
@@ -41,7 +41,7 @@ pub async fn login(
             )
         })?;
 
-    let jwt = JwtAuth::new(&state.auth_config.jwt_secret);
+    let jwt = &state.auth_config.jwt_auth;
     let tokens = jwt.generate_tokens(&user).map_err(|_e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -68,7 +68,7 @@ pub async fn refresh(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RefreshRequest>,
 ) -> Result<Json<TokenResponse>, (StatusCode, Json<serde_json::Value>)> {
-    let jwt = JwtAuth::new(&state.auth_config.jwt_secret);
+    let jwt = &state.auth_config.jwt_auth;
     let tokens = jwt.refresh_access_token(&req.refresh_token).map_err(|_e| {
         (
             StatusCode::UNAUTHORIZED,
@@ -199,6 +199,8 @@ pub async fn delete_user(
 #[derive(Deserialize)]
 pub struct ChangePasswordRequest {
     pub password: String,
+    #[serde(default)]
+    pub current_password: Option<String>,
 }
 
 pub async fn change_password(
@@ -207,11 +209,32 @@ pub async fn change_password(
     Path(username): Path<String>,
     Json(req): Json<ChangePasswordRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    if !claims.role.can_manage_users() && claims.username != username {
+    let is_self = claims.username == username;
+    if !claims.role.can_manage_users() && !is_self {
         return Err((
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
         ));
+    }
+
+    if is_self {
+        let current = req.current_password.ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "current_password required to change your own password", "code": 400})),
+            )
+        })?;
+        state
+            .auth_config
+            .user_store
+            .verify_password(&username, &current)
+            .await
+            .ok_or_else(|| {
+                (
+                    StatusCode::UNAUTHORIZED,
+                    Json(serde_json::json!({"error": "Current password incorrect", "code": 401})),
+                )
+            })?;
     }
 
     state

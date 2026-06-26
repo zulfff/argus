@@ -1,5 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
+    http::StatusCode,
     Extension, Json,
 };
 use serde::Deserialize;
@@ -11,7 +12,6 @@ use argus_core::vpn_portal::{VpnPeerRequest, VpnPeerStatus};
 
 #[derive(Deserialize)]
 pub struct SubmitRequest {
-    pub user_id: String,
     pub public_key: String,
     pub allowed_ips: String,
 }
@@ -20,36 +20,37 @@ pub async fn submit_request(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
     Json(payload): Json<SubmitRequest>,
-) -> Result<Json<VpnPeerRequest>, Json<serde_json::Value>> {
+) -> Result<Json<VpnPeerRequest>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_write() {
-        return Err(Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
         ));
     }
-    // Validate WireGuard public key format (44-char base64)
     let key = payload.public_key.trim();
     if key.len() != 44
         || !key
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
     {
-        return Err(Json(
-            serde_json::json!({"error": "Invalid WireGuard public key format", "code": 400}),
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Invalid WireGuard public key format", "code": 400})),
         ));
     }
-    // Validate allowed_ips CIDRs
     if !payload.allowed_ips.is_empty() {
         for ip_str in payload.allowed_ips.split(',') {
             let trimmed = ip_str.trim();
             if !trimmed.is_empty() && argus_common::net::validate_cidr(trimmed).is_err() {
-                return Err(Json(
-                    serde_json::json!({"error": format!("Invalid CIDR in allowed_ips: {}", trimmed), "code": 400}),
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({"error": format!("Invalid CIDR in allowed_ips: {}", trimmed), "code": 400})),
                 ));
             }
         }
     }
     let req = state.vpn_portal.submit_request(
-        &payload.user_id,
+        &claims.username,
         &payload.public_key,
         &payload.allowed_ips,
     );
@@ -65,10 +66,11 @@ pub async fn list_requests(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
     Query(query): Query<ListQuery>,
-) -> Result<Json<Vec<VpnPeerRequest>>, Json<serde_json::Value>> {
+) -> Result<Json<Vec<VpnPeerRequest>>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Err(Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
         ));
     }
     let status = query.status.as_deref().and_then(|s| match s {
@@ -90,10 +92,11 @@ pub async fn approve_request(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
     Path(id): Path<uuid::Uuid>,
-) -> Result<Json<serde_json::Value>, Json<serde_json::Value>> {
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_write() {
-        return Err(Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
         ));
     }
     if state.vpn_portal.approve(&id) {
@@ -101,8 +104,9 @@ pub async fn approve_request(
             serde_json::json!({"status": "approved", "id": id.to_string()}),
         ))
     } else {
-        Err(Json(
-            serde_json::json!({"error": "Request not found or not in pending state", "code": 404}),
+        Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Request not found or not in pending state", "code": 404})),
         ))
     }
 }
@@ -111,10 +115,11 @@ pub async fn deny_request(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
     Path(id): Path<uuid::Uuid>,
-) -> Result<Json<serde_json::Value>, Json<serde_json::Value>> {
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_write() {
-        return Err(Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
         ));
     }
     if state.vpn_portal.deny(&id) {
@@ -122,8 +127,9 @@ pub async fn deny_request(
             serde_json::json!({"status": "denied", "id": id.to_string()}),
         ))
     } else {
-        Err(Json(
-            serde_json::json!({"error": "Request not found or not in pending state", "code": 404}),
+        Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Request not found or not in pending state", "code": 404})),
         ))
     }
 }
@@ -132,10 +138,11 @@ pub async fn revoke_request(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
     Path(id): Path<uuid::Uuid>,
-) -> Result<Json<serde_json::Value>, Json<serde_json::Value>> {
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_delete() {
-        return Err(Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
         ));
     }
     if state.vpn_portal.revoke(&id) {
@@ -143,8 +150,9 @@ pub async fn revoke_request(
             serde_json::json!({"status": "revoked", "id": id.to_string()}),
         ))
     } else {
-        Err(Json(
-            serde_json::json!({"error": "Request not found or not in active/approved state", "code": 404}),
+        Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Request not found or not in active/approved state", "code": 404})),
         ))
     }
 }
@@ -153,11 +161,22 @@ pub async fn download_config(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
     Path(id): Path<uuid::Uuid>,
-) -> Result<Json<serde_json::Value>, Json<serde_json::Value>> {
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Err(Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
         ));
+    }
+    let requests = state.vpn_portal.list(None);
+    let peer = requests.iter().find(|r| r.id == id);
+    if let Some(peer) = peer {
+        if !claims.role.can_manage_users() && peer.user_id != claims.username {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({"error": "Cannot download config for another user's request", "code": 403})),
+            ));
+        }
     }
     let server_public_key =
         std::env::var("ARGUS_WG_PUBLIC_KEY").unwrap_or_else(|_| "SERVER_PUBLIC_KEY_BASE64".into());
@@ -168,8 +187,9 @@ pub async fn download_config(
         .generate_client_config(&id, &server_public_key, &endpoint)
     {
         Some(config) => Ok(Json(serde_json::json!({"config": config}))),
-        None => Err(Json(
-            serde_json::json!({"error": "Request not found or not approved", "code": 404}),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Request not found or not approved", "code": 404})),
         )),
     }
 }

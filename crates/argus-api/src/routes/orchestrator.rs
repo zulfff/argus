@@ -1,4 +1,4 @@
-use axum::{extract::State, Extension, Json};
+use axum::{extract::State, http::StatusCode, Extension, Json};
 use serde::Serialize;
 use std::sync::Arc;
 
@@ -20,12 +20,11 @@ pub struct ReconciliationResponse {
 pub async fn get_drift_status(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
-) -> Json<DriftStatusResponse> {
+) -> Result<Json<DriftStatusResponse>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Json(DriftStatusResponse {
-            configured: false,
-            reports: vec![],
-        });
+        return Err((StatusCode::FORBIDDEN, Json(
+            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
+        )));
     }
 
     match &state.drift_detector {
@@ -44,77 +43,78 @@ pub async fn get_drift_status(
                         })
                     })
                     .collect();
-                Json(DriftStatusResponse {
+                Ok(Json(DriftStatusResponse {
                     configured: true,
                     reports: reports_json,
-                })
+                }))
             }
-            Err(e) => Json(DriftStatusResponse {
+            Err(e) => Ok(Json(DriftStatusResponse {
                 configured: true,
                 reports: vec![serde_json::json!({"error": e.to_string()})],
-            }),
+            })),
         },
-        None => Json(DriftStatusResponse {
+        None => Ok(Json(DriftStatusResponse {
             configured: false,
             reports: vec![],
-        }),
+        })),
     }
 }
 
 pub async fn trigger_reconciliation(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
-) -> Json<ReconciliationResponse> {
+) -> Result<Json<ReconciliationResponse>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_write() {
-        return Json(ReconciliationResponse {
-            triggered: false,
-            message: "Insufficient permissions".into(),
-        });
+        return Err((StatusCode::FORBIDDEN, Json(
+            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
+        )));
     }
 
     match &state.drift_detector {
         Some(dd) => match dd.check_all_devices().await {
             Ok(reports) => {
                 let needs_fix: Vec<_> = reports.iter().filter(|r| r.needs_remediation).collect();
-                Json(ReconciliationResponse {
+                Ok(Json(ReconciliationResponse {
                     triggered: true,
                     message: format!(
                         "Reconciliation complete: {} devices checked, {} need remediation",
                         reports.len(),
                         needs_fix.len()
                     ),
-                })
+                }))
             }
-            Err(e) => Json(ReconciliationResponse {
+            Err(e) => Ok(Json(ReconciliationResponse {
                 triggered: true,
                 message: format!("Reconciliation failed: {}", e),
-            }),
+            })),
         },
-        None => Json(ReconciliationResponse {
+        None => Ok(Json(ReconciliationResponse {
             triggered: false,
             message: "Orchestrator not configured (set NETBOX_URL and NETBOX_TOKEN)".into(),
-        }),
+        })),
     }
 }
 
 pub async fn get_netbox_devices(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
-) -> Json<serde_json::Value> {
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Json(serde_json::json!({"error": "Insufficient permissions"}));
+        return Err((StatusCode::FORBIDDEN, Json(
+            serde_json::json!({"error": "Insufficient permissions"}),
+        )));
     }
 
     match &state.netbox_client {
         Some(nb) => match nb.get_devices(None).await {
-            Ok(devices) => Json(serde_json::json!({
+            Ok(devices) => Ok(Json(serde_json::json!({
                 "devices": devices,
                 "count": devices.len()
-            })),
-            Err(e) => Json(serde_json::json!({"error": e.to_string()})),
+            }))),
+            Err(e) => Ok(Json(serde_json::json!({"error": e.to_string()}))),
         },
-        None => Json(serde_json::json!({
+        None => Ok(Json(serde_json::json!({
             "error": "Orchestrator not configured (set NETBOX_URL and NETBOX_TOKEN)"
-        })),
+        }))),
     }
 }
