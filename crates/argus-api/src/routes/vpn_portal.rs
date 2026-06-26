@@ -101,17 +101,21 @@ pub async fn approve_request(
             Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
         ));
     }
-    if state.vpn_portal.approve(&id) {
-        Ok(Json(
+    match state.vpn_portal.approve(&id, &claims.username) {
+        Ok(()) => Ok(Json(
             serde_json::json!({"status": "approved", "id": id.to_string()}),
-        ))
-    } else {
-        Err((
-            StatusCode::NOT_FOUND,
-            Json(
-                serde_json::json!({"error": "Request not found or not in pending state", "code": 404}),
-            ),
-        ))
+        )),
+        Err(msg) => {
+            let status = if msg.contains("own request") {
+                StatusCode::FORBIDDEN
+            } else {
+                StatusCode::NOT_FOUND
+            };
+            Err((
+                status,
+                Json(serde_json::json!({"error": msg, "code": status.as_u16()})),
+            ))
+        }
     }
 }
 

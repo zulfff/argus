@@ -94,10 +94,31 @@ pub fn app(state: Arc<AppState>) -> Router {
             .expect("login governor config builder failed"),
     );
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    let cors = if let Ok(allowed_origins) = std::env::var("ARGUS_ALLOWED_ORIGINS") {
+        let origins: Vec<_> = allowed_origins
+            .split(',')
+            .filter_map(|s| s.trim().parse::<axum::http::HeaderValue>().ok())
+            .collect();
+        if origins.is_empty() {
+            warn!("ARGUS_ALLOWED_ORIGINS set but no valid origins parsed, using Any");
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any)
+        } else {
+            info!("CORS restricted to {} origin(s)", origins.len());
+            CorsLayer::new()
+                .allow_origin(origins)
+                .allow_methods(Any)
+                .allow_headers(Any)
+        }
+    } else {
+        warn!("ARGUS_ALLOWED_ORIGINS not set, CORS allows all origins (development mode)");
+        CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any)
+    };
 
     let protected_routes = Router::new()
         .route(
@@ -575,7 +596,12 @@ async fn try_main() -> anyhow::Result<()> {
             anyhow::bail!("ARGUS_JWT_SECRET too short: {} bytes, need >= 32", s.len());
         }
         Err(_) => {
-            warn!("ARGUS_JWT_SECRET not set — generating random secret for this session.");
+            if std::env::var("ARGUS_PRODUCTION").is_ok() || db_pool.is_some() {
+                error!("ARGUS_JWT_SECRET must be set in production mode (ARGUS_PRODUCTION=1 or DATABASE_URL set)");
+                anyhow::bail!("ARGUS_JWT_SECRET required in production");
+            }
+            warn!("ARGUS_JWT_SECRET not set — generating random secret for this session (development mode only).");
+            warn!("All tokens will be invalidated on restart. Set ARGUS_JWT_SECRET for persistent tokens.");
             generate_secret()
         }
     };

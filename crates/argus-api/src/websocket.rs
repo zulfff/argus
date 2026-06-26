@@ -125,7 +125,16 @@ pub async fn ws_handler(
             ));
         }
     } else if let Some(token) = query.token {
-        warn!("WebSocket using deprecated query string authentication. Use Sec-WebSocket-Protocol header instead.");
+        warn!(
+            "WebSocket using DEPRECATED query string authentication (tokens exposed in logs/history). \
+             Use Sec-WebSocket-Protocol header instead. Query string auth will be removed in v2.0."
+        );
+        if std::env::var("ARGUS_PRODUCTION").is_ok() {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                "Query string authentication disabled in production mode. Use Sec-WebSocket-Protocol header.".into(),
+            ));
+        }
         token
     } else {
         return Err((
