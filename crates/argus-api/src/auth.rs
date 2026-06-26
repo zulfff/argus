@@ -630,7 +630,9 @@ mod tests {
             "refresh token reuse within grace period should succeed (prevents false positives from network retries)"
         );
 
-        let refreshed2 = auth.refresh_access_token(&refreshed1.refresh_token).unwrap();
+        let refreshed2 = auth
+            .refresh_access_token(&refreshed1.refresh_token)
+            .unwrap();
         assert_eq!(refreshed2.role, "admin");
 
         std::thread::sleep(std::time::Duration::from_secs(6));

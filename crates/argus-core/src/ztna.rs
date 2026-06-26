@@ -301,7 +301,14 @@ mod tests {
         assert!(config.contains("PrivateKey = PRIVATE_KEY_BASE64=="));
         assert!(config.contains("PublicKey = PEER_PUBLIC_KEY_BASE64=="));
         assert!(config.contains("Endpoint = 192.168.1.10:51820"));
-        assert!(config.contains("iptables"));
+        assert!(
+            !config.contains("iptables"),
+            "hooks should not be included in client config (security: command injection prevention)"
+        );
+        assert!(
+            !config.contains("PostUp"),
+            "PostUp hooks should not be in client config"
+        );
     }
 
     #[test]
