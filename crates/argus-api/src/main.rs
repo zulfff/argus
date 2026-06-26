@@ -891,11 +891,12 @@ async fn try_main() -> anyhow::Result<()> {
             eprintln!("  ARGUS API — http://127.0.0.1:8443");
             eprintln!("  Health:     http://127.0.0.1:8443/health");
             eprintln!("  Admin user: {}", admin_user);
-            eprintln!("  Password:   {} (default, change in Settings)", 
-                if std::env::var("ARGUS_ADMIN_PASS").is_ok() { 
-                    "set via ARGUS_ADMIN_PASS" 
-                } else { 
-                    "123456" 
+            eprintln!(
+                "  Password:   {} (default, change in Settings)",
+                if std::env::var("ARGUS_ADMIN_PASS").is_ok() {
+                    "set via ARGUS_ADMIN_PASS"
+                } else {
+                    "123456"
                 }
             );
             eprintln!("  ========================================");

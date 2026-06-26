@@ -25,7 +25,8 @@ const REFRESH_TOKEN_REUSE_GRACE_SECS: u64 = 5;
 
 fn hash_password(password: &str) -> Result<String, String> {
     let salt = SaltString::generate(&mut OsRng);
-    let params = Params::new(4096, 3, 1, None).map_err(|e| format!("argon2 params error: {}", e))?;
+    let params =
+        Params::new(4096, 3, 1, None).map_err(|e| format!("argon2 params error: {}", e))?;
     let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
     argon2
         .hash_password(password.as_bytes(), &salt)
