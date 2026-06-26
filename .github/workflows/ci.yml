@@ -58,3 +58,26 @@ jobs:
 
       - name: cargo test
         run: cargo test --workspace --exclude argus-ebpf
+
+  ebpf:
+    name: eBPF build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: nightly
+          targets: bpfel-unknown-none
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ebpf
+
+      - name: Build eBPF
+        run: cargo +nightly build -p argus-ebpf --release
+
+      - name: Check eBPF artifact
+        run: |
+          ls -lh target/bpfel-unknown-none/release/
+          file target/bpfel-unknown-none/release/libargus_ebpf.a || echo "eBPF artifact built"

@@ -4,18 +4,19 @@ use aya_ebpf::maps::lpm_trie::Key;
 use aya_ebpf::programs::XdpContext;
 use network_types::{
     eth::{EthHdr, EtherType},
-    ip::{IpProto, Ipv4Hdr},
+    ip::{Ipv4Hdr, Ipv6Hdr},
     tcp::TcpHdr,
     udp::UdpHdr,
 };
 
 use crate::maps::{
-    CONNTRACK, DST_ALLOWLIST, DST_BLOCKLIST, PER_CPU_PACKETS, RATE_LIMIT_BUCKETS, SRC_ALLOWLIST,
-    SRC_BLOCKLIST,
+    CONNTRACK, DST_ALLOWLIST, DST_ALLOWLIST_V6, DST_BLOCKLIST, DST_BLOCKLIST_V6, PER_CPU_PACKETS,
+    RATE_LIMIT_BUCKETS, SRC_ALLOWLIST, SRC_ALLOWLIST_V6, SRC_BLOCKLIST, SRC_BLOCKLIST_V6,
 };
 
 const ETH_HDR_LEN: usize = core::mem::size_of::<EthHdr>();
 const IPV4_HDR_LEN: usize = core::mem::size_of::<Ipv4Hdr>();
+const IPV6_HDR_LEN: usize = core::mem::size_of::<Ipv6Hdr>();
 
 #[xdp]
 pub fn argus_firewall(ctx: XdpContext) -> u32 {
@@ -37,15 +38,44 @@ unsafe fn try_argus_firewall(ctx: XdpContext) -> Result<u32, u32> {
     let eth_hdr = data as *const EthHdr;
     let ether_type =
         unsafe { core::ptr::read_unaligned(core::ptr::addr_of!((*eth_hdr).ether_type)) };
-    if ether_type != EtherType::Ipv4 {
+    
+    match ether_type {
+        EtherType::Ipv4 => handle_ipv4(ctx, data, data_end),
+        EtherType::Ipv6 => handle_ipv6(ctx, data, data_end),
+        _ => Ok(xdp_action::XDP_PASS),
+    }
+}
+
+#[inline(always)]
+unsafe fn handle_ipv4(_ctx: XdpContext, data: usize, data_end: usize) -> Result<u32, u32> {
+    if data + ETH_HDR_LEN + IPV4_HDR_LEN > data_end {
         return Ok(xdp_action::XDP_PASS);
     }
 
     let ip_hdr = &*((data + ETH_HDR_LEN) as *const Ipv4Hdr);
 
+    let version_ihl = unsafe { *(data as *const u8).add(ETH_HDR_LEN) };
+    let ihl = (version_ihl & 0x0F) as usize;
+    let ip_hdr_len = ihl * 4;
+    
+    if ip_hdr_len < 20 || data + ETH_HDR_LEN + ip_hdr_len > data_end {
+        return Ok(xdp_action::XDP_PASS);
+    }
+
     let src_ip = u32::from_be_bytes(ip_hdr.src_addr);
     let dst_ip = u32::from_be_bytes(ip_hdr.dst_addr);
-    let protocol = ip_hdr.proto;
+    let protocol_byte = unsafe { *(data as *const u8).add(ETH_HDR_LEN + 9) };
+    
+    let frag_off_bytes = unsafe {
+        [
+            *(data as *const u8).add(ETH_HDR_LEN + 6),
+            *(data as *const u8).add(ETH_HDR_LEN + 7),
+        ]
+    };
+    let frag_off = u16::from_be_bytes(frag_off_bytes);
+    let more_fragments = (frag_off & 0x2000) != 0;
+    let fragment_offset = (frag_off & 0x1FFF) * 8;
+    let is_fragment = more_fragments || fragment_offset > 0;
 
     if let Some(packets_ptr) = PER_CPU_PACKETS.get_ptr_mut(0) {
         *packets_ptr = (*packets_ptr).wrapping_add(1);
@@ -76,26 +106,97 @@ unsafe fn try_argus_firewall(ctx: XdpContext) -> Result<u32, u32> {
         return Ok(xdp_action::XDP_DROP);
     }
 
-    match protocol {
-        IpProto::Tcp => {
-            let tcp_off = ETH_HDR_LEN + IPV4_HDR_LEN;
+    if !is_fragment {
+        match protocol_byte {
+            6 => {
+                let tcp_off = ETH_HDR_LEN + ip_hdr_len;
+                if data + tcp_off + core::mem::size_of::<TcpHdr>() > data_end {
+                    return Ok(xdp_action::XDP_PASS);
+                }
+                let tcp_hdr = &*((data + tcp_off) as *const TcpHdr);
+                let src_port = u16::from_be(tcp_hdr.source);
+                let dst_port = u16::from_be(tcp_hdr.dest);
+                track_connection(src_ip, dst_ip, src_port, dst_port, protocol_byte);
+            }
+            17 => {
+                let udp_off = ETH_HDR_LEN + ip_hdr_len;
+                if data + udp_off + core::mem::size_of::<UdpHdr>() > data_end {
+                    return Ok(xdp_action::XDP_PASS);
+                }
+                let udp_hdr = &*((data + udp_off) as *const UdpHdr);
+                let src_port = u16::from_be_bytes(udp_hdr.source);
+                let dst_port = u16::from_be_bytes(udp_hdr.dest);
+                track_connection(src_ip, dst_ip, src_port, dst_port, protocol_byte);
+            }
+            _ => {}
+        }
+    }
+
+    Ok(xdp_action::XDP_PASS)
+}
+
+#[inline(always)]
+unsafe fn handle_ipv6(_ctx: XdpContext, data: usize, data_end: usize) -> Result<u32, u32> {
+    if data + ETH_HDR_LEN + IPV6_HDR_LEN > data_end {
+        return Ok(xdp_action::XDP_PASS);
+    }
+
+    let ip_hdr = &*((data + ETH_HDR_LEN) as *const Ipv6Hdr);
+
+    let src_addr = u128::from_be_bytes(ip_hdr.src_addr);
+    let dst_addr = u128::from_be_bytes(ip_hdr.dst_addr);
+    let protocol_byte = unsafe { *(data as *const u8).add(ETH_HDR_LEN + 6) };
+
+    if let Some(packets_ptr) = PER_CPU_PACKETS.get_ptr_mut(1) {
+        *packets_ptr = (*packets_ptr).wrapping_add(1);
+    }
+
+    let src_key = Key::new(128, src_addr);
+    let dst_key = Key::new(128, dst_addr);
+
+    if SRC_BLOCKLIST_V6.get(&src_key).is_some() || DST_BLOCKLIST_V6.get(&dst_key).is_some() {
+        return Ok(xdp_action::XDP_DROP);
+    }
+
+    let marker: u128 = 0;
+    let marker_key = Key::new(0, marker);
+    if SRC_ALLOWLIST_V6.get(&marker_key).is_some()
+        && SRC_ALLOWLIST_V6.get(&src_key).is_none()
+        && SRC_BLOCKLIST_V6.get(&src_key).is_none()
+    {
+        return Ok(xdp_action::XDP_DROP);
+    }
+    if DST_ALLOWLIST_V6.get(&marker_key).is_some()
+        && DST_ALLOWLIST_V6.get(&dst_key).is_none()
+        && DST_BLOCKLIST_V6.get(&dst_key).is_none()
+    {
+        return Ok(xdp_action::XDP_DROP);
+    }
+
+    match protocol_byte {
+        6 => {
+            let tcp_off = ETH_HDR_LEN + IPV6_HDR_LEN;
             if data + tcp_off + core::mem::size_of::<TcpHdr>() > data_end {
                 return Ok(xdp_action::XDP_PASS);
             }
             let tcp_hdr = &*((data + tcp_off) as *const TcpHdr);
             let src_port = u16::from_be(tcp_hdr.source);
             let dst_port = u16::from_be(tcp_hdr.dest);
-            track_connection(src_ip, dst_ip, src_port, dst_port, protocol as u8);
+            let src_ip_hash = (src_addr as u32) ^ ((src_addr >> 32) as u32);
+            let dst_ip_hash = (dst_addr as u32) ^ ((dst_addr >> 32) as u32);
+            track_connection(src_ip_hash, dst_ip_hash, src_port, dst_port, protocol_byte);
         }
-        IpProto::Udp => {
-            let udp_off = ETH_HDR_LEN + IPV4_HDR_LEN;
+        17 => {
+            let udp_off = ETH_HDR_LEN + IPV6_HDR_LEN;
             if data + udp_off + core::mem::size_of::<UdpHdr>() > data_end {
                 return Ok(xdp_action::XDP_PASS);
             }
             let udp_hdr = &*((data + udp_off) as *const UdpHdr);
             let src_port = u16::from_be_bytes(udp_hdr.source);
             let dst_port = u16::from_be_bytes(udp_hdr.dest);
-            track_connection(src_ip, dst_ip, src_port, dst_port, protocol as u8);
+            let src_ip_hash = (src_addr as u32) ^ ((src_addr >> 32) as u32);
+            let dst_ip_hash = (dst_addr as u32) ^ ((dst_addr >> 32) as u32);
+            track_connection(src_ip_hash, dst_ip_hash, src_port, dst_port, protocol_byte);
         }
         _ => {}
     }
@@ -113,17 +214,19 @@ fn check_rate_limit(src_ip: u32) -> bool {
     let bucket = match RATE_LIMIT_BUCKETS.get_ptr_mut(&src_ip) {
         Some(ptr) => ptr,
         None => {
-            let _ = RATE_LIMIT_BUCKETS.insert(&src_ip, &MAX_TOKENS, 0);
+            let new_val = ((now_ns as u64) << 32) | MAX_TOKENS;
+            let _ = RATE_LIMIT_BUCKETS.insert(&src_ip, &new_val, 0);
             return true;
         }
     };
 
     let value = unsafe { *bucket };
-    let tokens = value & 0xFFFFFFFF;
-    let last_refill = value >> 32;
+    let tokens = (value & 0xFFFFFFFF) as u32;
+    let last_refill = (value >> 32) as u64;
 
-    if now_ns >= last_refill + REFILL_INTERVAL_NS {
-        let new_val = (now_ns << 32) | MAX_TOKENS;
+    let elapsed = now_ns.saturating_sub(last_refill);
+    if elapsed >= REFILL_INTERVAL_NS {
+        let new_val = ((now_ns as u64) << 32) | MAX_TOKENS;
         unsafe { *bucket = new_val };
         return true;
     }
@@ -132,7 +235,7 @@ fn check_rate_limit(src_ip: u32) -> bool {
         return false;
     }
 
-    let new_val = (last_refill << 32) | (tokens.saturating_sub(1));
+    let new_val = ((last_refill as u64) << 32) | ((tokens - 1) as u64);
     unsafe { *bucket = new_val };
     true
 }

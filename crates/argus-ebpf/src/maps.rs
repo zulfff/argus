@@ -14,6 +14,18 @@ pub static DST_BLOCKLIST: LpmTrie<u32, u32> = LpmTrie::with_max_entries(65536, 0
 pub static DST_ALLOWLIST: LpmTrie<u32, u32> = LpmTrie::with_max_entries(65536, 0);
 
 #[map]
+pub static SRC_BLOCKLIST_V6: LpmTrie<u128, u32> = LpmTrie::with_max_entries(32768, 0);
+
+#[map]
+pub static SRC_ALLOWLIST_V6: LpmTrie<u128, u32> = LpmTrie::with_max_entries(32768, 0);
+
+#[map]
+pub static DST_BLOCKLIST_V6: LpmTrie<u128, u32> = LpmTrie::with_max_entries(32768, 0);
+
+#[map]
+pub static DST_ALLOWLIST_V6: LpmTrie<u128, u32> = LpmTrie::with_max_entries(32768, 0);
+
+#[map]
 pub static CONNTRACK: HashMap<u64, u32> = HashMap::with_max_entries(262144, 0);
 
 #[map]
