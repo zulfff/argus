@@ -3,9 +3,7 @@ import * as api from '../api.js';
 import Badge from '../components/Badge.jsx';
 import { PageHeader, SkeletonRows, EmptyState, LoadingError } from '../components/Shared.jsx';
 import { protoName } from '../components/Shared.jsx';
-
-const inputCls = "bg-[var(--color-bg-root)] border border-[var(--color-bg-border)] rounded px-2.5 py-1.5 text-xs text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] hover:border-[var(--color-text-muted)] transition-colors";
-const selectCls = "bg-[var(--color-bg-root)] border border-[var(--color-bg-border)] rounded px-2.5 py-1.5 text-xs text-[var(--color-text)] outline-none cursor-pointer hover:border-[var(--color-text-muted)] transition-colors";
+import { inputCls, selectCls, cardCls, tableCls, tableRowCls, tableHeaderCls, tableCellCls } from '../styles.js';
 
 export default function Connections() {
   const [conns, setConns] = useState([]);
@@ -34,52 +32,81 @@ export default function Connections() {
 
   return (
     <div>
-      <PageHeader title="Connections" subtitle={<span><span className="w-[7px] h-[7px] rounded-full bg-[var(--color-green-400)] inline-block animate-live shrink-0 mr-1.5 align-middle shadow-[0_0_6px_var(--color-green-glow)]" />LIVE — {active} active</span>} />
+      <PageHeader 
+        title="Active Connections" 
+        subtitle={
+          <span className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[var(--color-success)] inline-block animate-live shadow-sm" />
+            <span>LIVE — {active} active connections</span>
+          </span>
+        } 
+      />
 
-      <div className="flex gap-3 mb-3">
-        {[{ label: 'Total Active', value: active }, { label: 'New', value: conns.filter((c) => c.state === 'new').length }, { label: 'Closed', value: conns.filter((c) => c.state === 'closed').length }].map((s) => (
-          <div key={s.label} className="flex-1 bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-2 px-4">
-            <div className="text-[var(--color-text-sec)] text-[11px]">{s.label}</div>
-            <div className="text-mono text-xl">{s.value}</div>
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <StatCard label="Total Active" value={active} />
+        <StatCard label="New" value={conns.filter((c) => c.state === 'new').length} />
+        <StatCard label="Established" value={conns.filter((c) => c.state === 'established').length} />
+        <StatCard label="Closed" value={conns.filter((c) => c.state === 'closed').length} />
+      </div>
+
+      <div className={cardCls + " mb-6"}>
+        <div className="text-sm font-semibold text-[var(--color-text)] mb-3">Protocol Distribution</div>
+        <div className="flex gap-4 items-center">
+          <div className="flex-1">
+            <div className="flex h-3 rounded-full overflow-hidden bg-[var(--color-bg-border)]">
+              <div className="bg-[var(--color-success)] transition-all duration-500" style={{ width: `${(tcp / totalP) * 100}%` }} title={`TCP: ${tcp}`} />
+              <div className="bg-[var(--color-primary)] transition-all duration-500" style={{ width: `${(udp / totalP) * 100}%` }} title={`UDP: ${udp}`} />
+              <div className="bg-[var(--color-warning)] transition-all duration-500" style={{ width: `${(icmp / totalP) * 100}%` }} title={`ICMP: ${icmp}`} />
+            </div>
           </div>
-        ))}
-        <div className="flex-[2] bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-2 px-4">
-          <div className="text-[var(--color-text-sec)] text-[11px] mb-1">TCP:UDP:ICMP = {tcp}:{udp}:{icmp}</div>
-          <div className="flex h-[5px] rounded-sm overflow-hidden bg-[var(--color-bg-border)]">
-            <div className="bg-[var(--color-green-400)] transition-all duration-500" style={{ width: `${(tcp / totalP) * 100}%` }} />
-            <div className="bg-[var(--color-blue-400)] transition-all duration-500" style={{ width: `${(udp / totalP) * 100}%` }} />
-            <div className="bg-[var(--color-yellow-400)] transition-all duration-500" style={{ width: `${(icmp / totalP) * 100}%` }} />
+          <div className="text-xs text-[var(--color-text-sec)] font-mono">
+            TCP:{tcp} · UDP:{udp} · ICMP:{icmp}
           </div>
         </div>
       </div>
 
-      <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3 mb-3">
-        <div className="flex gap-2">
-          <input className={inputCls + ' w-[220px]'} placeholder="Search IP or port..." value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className={cardCls + " mb-4"}>
+        <div className="flex gap-2 flex-wrap">
+          <input className={inputCls + ' !w-[220px]'} placeholder="Search by IP address..." value={search} onChange={(e) => setSearch(e.target.value)} />
           <select className={selectCls} value={filterState} onChange={(e) => setFilterState(e.target.value)}>
-            <option value="all">All States</option><option value="new">New</option><option value="established">Established</option><option value="closing">Closing</option><option value="closed">Closed</option>
+            <option value="all">All States</option>
+            {['new','established','closing','closed'].map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           <select className={selectCls} value={filterProto} onChange={(e) => setFilterProto(e.target.value)}>
-            <option value="all">All Protocols</option><option value="6">TCP</option><option value="17">UDP</option><option value="1">ICMP</option>
+            <option value="all">All Protocols</option>
+            <option value="6">TCP</option><option value="17">UDP</option><option value="1">ICMP</option>
           </select>
         </div>
       </div>
 
-      <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded overflow-hidden">
-        {loading ? <SkeletonRows count={5} cols={8} /> : error ? <LoadingError message={error} onRetry={fetchConns} /> : (
+      <div className={tableCls}>
+        {loading ? <SkeletonRows count={8} cols={7} /> : error ? <LoadingError message={error} onRetry={fetchConns} /> : (
           <table className="w-full border-collapse">
-            <thead><tr className="border-b border-[var(--color-bg-border)]">{['Src IP:Port','→','Dst IP:Port','Proto','State','Duration','Packets'].map((h) => <th key={h} className="px-2.5 py-2 text-left text-[var(--color-text-sec)] text-[10px] font-semibold uppercase tracking-wider">{h}</th>)}</tr></thead>
+            <thead>
+              <tr>
+                {['Source','','Destination','Protocol','State','Duration','Packets'].map((h) => (
+                  <th key={h} className={tableHeaderCls}>{h}</th>
+                ))}
+              </tr>
+            </thead>
             <tbody>
-              {filtered.length === 0 ? <tr><td colSpan={7}><EmptyState msg={search ? 'No connections match filter.' : 'No active connections.'} /></td></tr> : (
-                filtered.slice(0, 50).map((c, i) => (
-                  <tr key={i} className="border-b border-[var(--color-bg-border)] hover:bg-[var(--color-bg-elevated)] transition-colors cursor-pointer" style={{ opacity: c.state === 'closing' ? 0.5 : 1 }} onClick={() => setSelected(selected?.src_ip === c.src_ip && selected?.src_port === c.src_port ? null : c)}>
-                    <td className="px-2.5 py-2 text-mono text-[11px]">{c.src_ip}:{c.src_port}</td>
-                    <td className="px-2.5 py-2 text-[var(--color-text-sec)]">→</td>
-                    <td className="px-2.5 py-2 text-mono text-[11px]">{c.dst_ip}:{c.dst_port}</td>
-                    <td className="px-2.5 py-2"><Badge variant={protoName(c.protocol)?.toLowerCase()}>{protoName(c.protocol)}</Badge></td>
-                    <td className="px-2.5 py-2"><Badge variant={c.state}>{c.state}</Badge></td>
-                    <td className="px-2.5 py-2 text-mono text-[11px] text-[var(--color-text-sec)]">{c.duration || '—'}</td>
-                    <td className="px-2.5 py-2 text-mono text-[11px] text-[var(--color-text-sec)]">{c.packets || '—'}</td>
+              {filtered.length === 0 ? (
+                <tr><td colSpan={7}><EmptyState msg={search ? 'No connections match your filters.' : 'No active connections.'} /></td></tr>
+              ) : (
+                filtered.slice(0, 100).map((c, i) => (
+                  <tr 
+                    key={i} 
+                    className={tableRowCls + ' cursor-pointer'} 
+                    style={{ opacity: c.state === 'closing' || c.state === 'closed' ? 0.6 : 1 }} 
+                    onClick={() => setSelected(selected?.src_ip === c.src_ip && selected?.src_port === c.src_port ? null : c)}
+                  >
+                    <td className={tableCellCls + ' text-mono font-medium'}>{c.src_ip}:{c.src_port}</td>
+                    <td className={tableCellCls + ' text-[var(--color-text-muted)] text-center'}>→</td>
+                    <td className={tableCellCls + ' text-mono font-medium'}>{c.dst_ip}:{c.dst_port}</td>
+                    <td className={tableCellCls}><Badge variant={protoName(c.protocol)?.toLowerCase()}>{protoName(c.protocol)}</Badge></td>
+                    <td className={tableCellCls}><Badge variant={c.state}>{c.state}</Badge></td>
+                    <td className={tableCellCls + ' text-mono text-[var(--color-text-sec)]'}>{c.duration || '—'}</td>
+                    <td className={tableCellCls + ' text-mono text-[var(--color-text-sec)]'}>{(c.packets_sent || 0) + (c.packets_recv || 0)}</td>
                   </tr>
                 ))
               )}
@@ -89,18 +116,45 @@ export default function Connections() {
       </div>
 
       {selected && (
-        <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3.5 mt-3 animate-fade">
-          <div className="text-[var(--color-green-400)] text-xs text-mono mb-3">Connection Details</div>
-          <div className="grid grid-cols-3 gap-2">
-            {[['Src IP', selected.src_ip], ['Dst IP', selected.dst_ip], ['Src Port', selected.src_port], ['Dst Port', selected.dst_port], ['Protocol', protoName(selected.protocol)], ['State', selected.state]].map(([l, v]) => (
-              <div key={l} className="p-2 bg-[var(--color-bg-elevated)] rounded border border-[var(--color-bg-border)]">
-                <div className="text-[var(--color-text-sec)] text-[10px]">{l}</div>
-                <div className="text-mono text-xs text-[var(--color-text)] mt-0.5">{v}</div>
-              </div>
-            ))}
+        <div className={cardCls + " mt-6"}>
+          <div className="flex justify-between items-start mb-4">
+            <h3 className="text-sm font-semibold text-[var(--color-text)]">Connection Details</h3>
+            <button onClick={() => setSelected(null)} className="text-[var(--color-text-muted)] hover:text-[var(--color-text)] text-xl leading-none">×</button>
+          </div>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <DetailRow label="Source IP" value={selected.src_ip} />
+            <DetailRow label="Destination IP" value={selected.dst_ip} />
+            <DetailRow label="Source Port" value={selected.src_port} />
+            <DetailRow label="Destination Port" value={selected.dst_port} />
+            <DetailRow label="Protocol" value={protoName(selected.protocol)} />
+            <DetailRow label="State" value={<Badge variant={selected.state}>{selected.state}</Badge>} />
+            <DetailRow label="Packets Sent" value={selected.packets_sent || 0} />
+            <DetailRow label="Packets Received" value={selected.packets_recv || 0} />
+            <DetailRow label="Bytes Sent" value={(selected.bytes_sent || 0).toLocaleString()} />
+            <DetailRow label="Bytes Received" value={(selected.bytes_recv || 0).toLocaleString()} />
+            <DetailRow label="Duration" value={selected.duration || 'Unknown'} />
+            <DetailRow label="Last Seen" value={selected.last_seen ? new Date(selected.last_seen).toLocaleString() : 'Unknown'} />
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function StatCard({ label, value }) {
+  return (
+    <div className="bg-white border border-[var(--color-bg-border)] rounded-lg p-4 shadow-[var(--shadow-sm)]">
+      <div className="text-[var(--color-text-sec)] text-xs font-medium uppercase tracking-wide mb-1">{label}</div>
+      <div className="text-2xl font-bold text-[var(--color-text)] text-mono">{value}</div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }) {
+  return (
+    <div>
+      <div className="text-[var(--color-text-sec)] text-xs font-medium mb-1">{label}</div>
+      <div className="text-[var(--color-text)] font-mono text-sm">{value}</div>
     </div>
   );
 }

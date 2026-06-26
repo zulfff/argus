@@ -2,11 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import * as api from '../api.js';
 import Badge from '../components/Badge.jsx';
 import { Toggle, Modal, PageHeader, SkeletonRows, EmptyState, LoadingError, Field } from '../components/Shared.jsx';
-
-const inputCls = "w-full bg-[var(--color-bg-root)] border border-[var(--color-bg-border)] rounded px-2.5 py-1.5 text-xs text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] hover:border-[var(--color-text-muted)] transition-colors";
-const selectCls = "bg-[var(--color-bg-root)] border border-[var(--color-bg-border)] rounded px-2.5 py-1.5 text-xs text-[var(--color-text)] outline-none cursor-pointer hover:border-[var(--color-text-muted)] transition-colors";
-const btnCls = "inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs rounded bg-[var(--color-bg-elevated)] text-[var(--color-text-sec)] border border-[var(--color-bg-border)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)] hover:border-[var(--color-text-muted)] transition-all";
-const primaryCls = "inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded bg-[var(--color-green-400)] text-black hover:bg-[var(--color-green-500)] hover:shadow-[0_0_16px_var(--color-green-glow)] transition-all";
+import { inputCls, selectCls, btnCls, primaryCls, dangerCls, cardCls, tableCls, tableRowCls, tableHeaderCls, tableCellCls } from '../styles.js';
 
 export default function Rules() {
   const [rules, setRules] = useState([]);
@@ -67,9 +63,9 @@ export default function Rules() {
         <button className={primaryCls} onClick={() => setModal(true)}>+ New Rule</button>
       </PageHeader>
 
-      <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3 mb-2.5">
+      <div className={cardCls + " mb-4"}>
         <div className="flex gap-2 flex-wrap items-center">
-          <input className={inputCls + ' !w-[200px]'} placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input className={inputCls + ' !w-[200px]'} placeholder="Search rules..." value={search} onChange={(e) => setSearch(e.target.value)} />
           <select className={selectCls} value={filterAction} onChange={(e) => setFilterAction(e.target.value)}>
             {['all','allow','deny','rate-limit'].map((v) => <option key={v} value={v}>{v === 'all' ? 'All Actions' : v}</option>)}
           </select>
@@ -79,53 +75,93 @@ export default function Rules() {
           <select className={selectCls} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
             <option value="all">All Status</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option>
           </select>
-          {selected.size > 0 && <span className="px-2 py-1 bg-[var(--color-bg-elevated)] rounded text-[var(--color-text-sec)] text-[11px]">{selected.size} selected</span>}
-          <a href="/api/v1/rules/export/json" className={btnCls + ' !ml-auto'}>Export</a>
+          {selected.size > 0 && <span className="px-2 py-1 bg-[var(--color-primary-light)] text-[var(--color-primary)] rounded-md text-xs font-medium">{selected.size} selected</span>}
+          <a href="/api/v1/rules/export/json" className={btnCls + ' !ml-auto'}>Export JSON</a>
         </div>
       </div>
 
       {simOpen && (
-        <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded p-3.5 mb-2.5">
-          <div className="flex justify-between mb-3">
-            <span className="text-[var(--color-text-sec)] text-xs">🔬 Packet Simulator</span>
-            <button onClick={() => setSimOpen(false)} className="bg-none border-none text-[var(--color-text-sec)] cursor-pointer">✕</button>
+        <div className={cardCls + " mb-4"}>
+          <div className="flex justify-between mb-4">
+            <span className="text-[var(--color-text)] text-sm font-semibold">🔬 Packet Simulator</span>
+            <button onClick={() => setSimOpen(false)} className="bg-none border-none text-[var(--color-text-muted)] cursor-pointer hover:text-[var(--color-text)] text-xl leading-none">×</button>
           </div>
-          <form onSubmit={handleSimulate} className="flex gap-2 flex-wrap items-end">
-            <Field label="Src IP"><input name="src_ip" className={inputCls + ' !w-[120px] text-mono'} required /></Field>
-            <Field label="Dst IP"><input name="dst_ip" className={inputCls + ' !w-[120px] text-mono'} required /></Field>
-            <Field label="Src Port"><input name="src_port" className={inputCls + ' !w-[70px] text-mono'} /></Field>
-            <Field label="Dst Port"><input name="dst_port" className={inputCls + ' !w-[70px] text-mono'} /></Field>
+          <form onSubmit={handleSimulate} className="flex gap-3 flex-wrap items-end">
+            <Field label="Src IP"><input name="src_ip" className={inputCls + ' !w-[140px] text-mono'} placeholder="192.168.1.1" required /></Field>
+            <Field label="Dst IP"><input name="dst_ip" className={inputCls + ' !w-[140px] text-mono'} placeholder="8.8.8.8" required /></Field>
+            <Field label="Src Port"><input name="src_port" className={inputCls + ' !w-[90px] text-mono'} placeholder="12345" /></Field>
+            <Field label="Dst Port"><input name="dst_port" className={inputCls + ' !w-[90px] text-mono'} placeholder="80" /></Field>
             <Field label="Protocol"><select name="protocol" className={selectCls}><option value="any">Any</option><option value="tcp">TCP</option><option value="udp">UDP</option><option value="icmp">ICMP</option></select></Field>
             <Field label="Direction"><select name="direction" className={selectCls} required><option value="inbound">Inbound</option><option value="outbound">Outbound</option><option value="forward">Forward</option></select></Field>
             <button type="submit" className={primaryCls}>Simulate</button>
           </form>
           {simResult && (
-            <div className="mt-3 p-3 rounded bg-[var(--color-bg-elevated)] border" style={{ borderColor: simResult.matched ? (simResult.action?.startsWith('allow') ? 'var(--color-green-400)' : simResult.action?.startsWith('deny') ? 'var(--color-red-400)' : 'var(--color-yellow-400)') : 'var(--color-text-muted)' }}>
-              <div className="text-[13px]">{simResult.matched ? <>Matched: <strong>{simResult.rule_name}</strong> → <strong>{simResult.action}</strong></> : 'No rule matched — packet would PASS'}</div>
+            <div className="mt-4 p-4 rounded-lg border-2" style={{ 
+              borderColor: simResult.matched 
+                ? (simResult.action?.startsWith('allow') ? 'var(--color-success)' : simResult.action?.startsWith('deny') ? 'var(--color-danger)' : 'var(--color-warning)') 
+                : 'var(--color-bg-border)',
+              background: simResult.matched
+                ? (simResult.action?.startsWith('allow') ? 'var(--color-success-light)' : simResult.action?.startsWith('deny') ? 'var(--color-danger-light)' : 'var(--color-warning-light)')
+                : 'var(--color-bg-hover)'
+            }}>
+              <div className="text-sm font-medium">
+                {simResult.matched ? (
+                  <>
+                    <span className="text-[var(--color-text)]">Matched: </span>
+                    <strong className="text-[var(--color-text)]">{simResult.rule_name}</strong>
+                    <span className="text-[var(--color-text-sec)]"> → </span>
+                    <strong>{simResult.action}</strong>
+                  </>
+                ) : (
+                  <span className="text-[var(--color-text-sec)]">No rule matched — packet would PASS</span>
+                )}
+              </div>
             </div>
           )}
         </div>
       )}
 
-      <div className="bg-[var(--color-bg-panel)] border border-[var(--color-bg-border)] rounded overflow-hidden">
-        {loading ? <SkeletonRows count={4} cols={11} /> : error ? <LoadingError message={error} onRetry={fetchRules} /> : (
+      <div className={tableCls}>
+        {loading ? <SkeletonRows count={5} cols={11} /> : error ? <LoadingError message={error} onRetry={fetchRules} /> : (
           <table className="w-full border-collapse">
-            <thead><tr className="border-b border-[var(--color-bg-border)]">{['','#','Name','Action','Dir','Src CIDR','Dst CIDR','Proto','Port','Status',''].map((h) => <th key={h} className="px-2.5 py-2 text-left text-[var(--color-text-sec)] text-[10px] font-semibold uppercase tracking-wider">{h === '' ? <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleAll} style={{ accentColor: 'var(--color-green-400)' }} /> : h}</th>)}</tr></thead>
+            <thead>
+              <tr>
+                {['','Priority','Name','Action','Direction','Src CIDR','Dst CIDR','Protocol','Port','Status',''].map((h) => (
+                  <th key={h} className={tableHeaderCls}>
+                    {h === '' ? <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleAll} className="cursor-pointer" style={{ accentColor: 'var(--color-primary)' }} /> : h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
             <tbody>
-              {filtered.length === 0 ? <tr><td colSpan={11}><EmptyState msg="No rules found." /></td></tr> : (
+              {filtered.length === 0 ? (
+                <tr><td colSpan={11}><EmptyState msg="No rules found." /></td></tr>
+              ) : (
                 filtered.map((r) => (
-                  <tr key={r.id} className="border-b border-[var(--color-bg-border)] hover:bg-[var(--color-bg-elevated)] transition-colors" style={{ background: simResult?.matched && simResult.rule_id === r.id ? 'rgba(0,171,68,0.08)' : undefined }}>
-                    <td className="px-2.5 py-2"><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} style={{ accentColor: 'var(--color-green-400)' }} /></td>
-                    <td className="px-2.5 py-2 text-mono text-[var(--color-text-muted)] text-[11px]">{r.priority}</td>
-                    <td className="px-2.5 py-2 text-xs">{r.name}</td>
-                    <td className="px-2.5 py-2"><Badge variant={r.action?.split(':')[0] || r.action}>{r.action}</Badge></td>
-                    <td className="px-2.5 py-2"><Badge variant={r.direction}>{r.direction}</Badge></td>
-                    <td className="px-2.5 py-2 text-mono text-[11px] text-[var(--color-text-sec)]">{r.src_cidr || '*'}</td>
-                    <td className="px-2.5 py-2 text-mono text-[11px] text-[var(--color-text-sec)]">{r.dst_cidr || '*'}</td>
-                    <td className="px-2.5 py-2 text-mono text-[11px] text-[var(--color-text-sec)]">{r.protocol || 'any'}</td>
-                    <td className="px-2.5 py-2 text-mono text-[11px] text-[var(--color-text-sec)]">{r.dst_port || r.src_port || '*'}</td>
-                    <td className="px-2.5 py-2"><Toggle checked={r.enabled} onChange={() => handleToggle(r)} /></td>
-                    <td className="px-2.5 py-2"><button className={btnCls + ' !p-1 !px-2 !text-[11px] !text-[var(--color-red-400)]'} onClick={() => handleDelete(r.id)}>🗑️</button></td>
+                  <tr 
+                    key={r.id} 
+                    className={tableRowCls} 
+                    style={{ 
+                      background: simResult?.matched && simResult.rule_id === r.id 
+                        ? 'var(--color-success-light)' 
+                        : undefined 
+                    }}
+                  >
+                    <td className={tableCellCls}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="cursor-pointer" style={{ accentColor: 'var(--color-primary)' }} /></td>
+                    <td className={tableCellCls + ' text-mono text-[var(--color-text-muted)]'}>{r.priority}</td>
+                    <td className={tableCellCls + ' font-medium'}>{r.name}</td>
+                    <td className={tableCellCls}><Badge variant={r.action?.split(':')[0] || r.action}>{r.action}</Badge></td>
+                    <td className={tableCellCls}><Badge variant={r.direction}>{r.direction}</Badge></td>
+                    <td className={tableCellCls + ' text-mono text-[var(--color-text-sec)]'}>{r.src_cidr || '*'}</td>
+                    <td className={tableCellCls + ' text-mono text-[var(--color-text-sec)]'}>{r.dst_cidr || '*'}</td>
+                    <td className={tableCellCls + ' text-mono text-[var(--color-text-sec)]'}>{r.protocol || 'any'}</td>
+                    <td className={tableCellCls + ' text-mono text-[var(--color-text-sec)]'}>{r.dst_port || r.src_port || '*'}</td>
+                    <td className={tableCellCls}><Toggle checked={r.enabled} onChange={() => handleToggle(r)} /></td>
+                    <td className={tableCellCls}>
+                      <button className={dangerCls + ' !p-1.5 !text-xs'} onClick={() => handleDelete(r.id)} title="Delete rule">
+                        🗑️
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -135,7 +171,7 @@ export default function Rules() {
       </div>
 
       <Modal open={modal} onClose={() => setModal(false)} title="New Firewall Rule">
-        <div className="grid grid-cols-2 gap-x-2.5">
+        <div className="grid grid-cols-2 gap-4">
           <Field label="Name *" error={errors.name}><input className={inputCls} value={form.name} onChange={(e) => { setForm({ ...form, name: e.target.value }); setErrors({}); }} /></Field>
           <Field label="Action *"><select className={selectCls + ' w-full'} value={form.action} onChange={(e) => setForm({ ...form, action: e.target.value })}><option value="allow">Allow</option><option value="deny">Deny</option><option value="rate-limit">Rate-Limit</option></select></Field>
           <Field label="Direction *"><select className={selectCls + ' w-full'} value={form.direction} onChange={(e) => setForm({ ...form, direction: e.target.value })}><option value="inbound">Inbound</option><option value="outbound">Outbound</option><option value="forward">Forward</option></select></Field>
@@ -148,8 +184,8 @@ export default function Rules() {
           <Field label="Enabled"><Toggle checked={form.enabled} onChange={() => setForm({ ...form, enabled: !form.enabled })} /></Field>
           <div className="col-span-2"><Field label="Description"><input className={inputCls} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field></div>
         </div>
-        {errors.form && <div className="text-[var(--color-red-400)] text-xs mt-2">{errors.form}</div>}
-        <div className="flex justify-end gap-2 mt-4">
+        {errors.form && <div className="text-[var(--color-danger)] text-sm mt-3 p-3 bg-[var(--color-danger-light)] border border-[var(--color-danger)] rounded-lg">{errors.form}</div>}
+        <div className="flex justify-end gap-2 mt-6">
           <button className={btnCls} onClick={() => setModal(false)}>Cancel</button>
           <button className={primaryCls} onClick={handleCreate} disabled={submitting}>{submitting ? 'Creating...' : 'Create Rule'}</button>
         </div>

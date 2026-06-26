@@ -1,0 +1,31 @@
+[2m2026-06-26T20:08:02.865709Z[0m [32m INFO[0m ARGUS v0.1.1 starting...
+[2m2026-06-26T20:08:02.866563Z[0m [32m INFO[0m Initializing engines...
+[2m2026-06-26T20:08:02.866903Z[0m [32m INFO[0m No DATABASE_URL set, using InMemoryRuleStore
+[2m2026-06-26T20:08:02.992874Z[0m [32m INFO[0m ARGUS_WAN_IFACE not set — eBPF data plane not loaded (set ARGUS_WAN_IFACE and ARGUS_EBPF_OBJECT to enable)
+[2m2026-06-26T20:08:02.992944Z[0m [32m INFO[0m NETBOX_URL/NETBOX_TOKEN not both set — orchestrator disabled
+[2m2026-06-26T20:08:02.992962Z[0m [32m INFO[0m Engines initialized
+[2m2026-06-26T20:08:02.992978Z[0m [32m INFO[0m No DATABASE_URL set, using in-memory stores
+[2m2026-06-26T20:08:02.993123Z[0m [32m INFO[0m Setting up JWT secret...
+[2m2026-06-26T20:08:02.993138Z[0m [32m INFO[0m Using JWT secret from ARGUS_JWT_SECRET env var
+[2m2026-06-26T20:08:03.005007Z[0m [32m INFO[0m Initial admin user 'admin' created
+[2m2026-06-26T20:08:03.005091Z[0m [32m INFO[0m Scheduler background task started
+[2m2026-06-26T20:08:03.005118Z[0m [32m INFO[0m GC background tasks started
+[2m2026-06-26T20:08:03.005134Z[0m [32m INFO[0m Anomaly detection background task started
+[2m2026-06-26T20:08:03.007109Z[0m [33m WARN[0m ARGUS_ALLOWED_ORIGINS not set, CORS allows all origins (development mode only)
+[2m2026-06-26T20:08:03.008183Z[0m [33m WARN[0m ARGUS_TLS_CERT and ARGUS_TLS_KEY not both set — using plain HTTP (insecure, development only)
+[2m2026-06-26T20:08:03.008428Z[0m [32m INFO[0m Ready. Listening on http://0.0.0.0:8443 (plain HTTP)
+
+  ========================================
+  ARGUS API — http://127.0.0.1:8443
+  Health:     http://127.0.0.1:8443/health
+  Admin user: admin
+  Password:   set via ARGUS_ADMIN_PASS env
+  ========================================
+  WARNING: No TLS configured — all traffic in cleartext
+  Set ARGUS_TLS_CERT and ARGUS_TLS_KEY env vars for TLS
+  For production: Set ARGUS_PRODUCTION=1 to enforce TLS
+  ========================================
+[2m2026-06-26T20:08:03.008561Z[0m [32m INFO[0m Starting rule scheduler (check interval: 60s)
+
+[2m2026-06-26T20:08:25.174477Z[0m [32m INFO[0m Ctrl+C received
+[2m2026-06-26T20:08:25.174817Z[0m [32m INFO[0m Signal received, starting graceful shutdown
