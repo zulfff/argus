@@ -239,9 +239,9 @@ impl EbpfController {
                     .map_err(|e| ArgusError::External(format!("PerCpuArray access: {}", e)))?;
 
             let mut stats = vec![0u64; 4];
-            for idx in 0..4 {
+            for (idx, stat) in stats.iter_mut().enumerate() {
                 if let Ok(values) = per_cpu_array.get(&(idx as u32), 0) {
-                    stats[idx] = values.iter().sum();
+                    *stat = values.iter().sum();
                 }
             }
             Ok(stats)
