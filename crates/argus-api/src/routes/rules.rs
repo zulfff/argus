@@ -269,10 +269,11 @@ pub async fn delete_rule(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
     Extension(claims): Extension<Claims>,
-) -> Result<Json<serde_json::Value>, Json<serde_json::Value>> {
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_delete() {
-        return Err(Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
         ));
     }
 
@@ -283,7 +284,12 @@ pub async fn delete_rule(
         .store()
         .delete_rule(&id)
         .await
-        .map_err(|e| Json(serde_json::json!({"error": e.to_string()})))?;
+        .map_err(|e| {
+            (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        })?;
 
     if let Some(ref rule) = rule_to_delete {
         if let Err(e) = state.ebpf_controller.sync_rule_delete(rule) {

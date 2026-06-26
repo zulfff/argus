@@ -67,7 +67,6 @@ pub async fn create_backup(
             serde_json::json!({
                 "id": u.id,
                 "username": u.username,
-                "password_hash": u.password_hash,
                 "role": u.role,
                 "enabled": u.enabled,
             })
@@ -357,15 +356,22 @@ async fn restore_from_snapshot(
             };
             let password_hash = user_val
                 .get("password_hash")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            if password_hash.is_empty() {
+                .and_then(|v| v.as_str());
+            if let Some(hash) = password_hash {
+                if !hash.is_empty() {
+                    parsed_users.push((username.to_string(), hash.to_string(), role));
+                } else {
+                    return Err(format!(
+                        "User '{}' in backup has empty password_hash — cannot restore. Regenerate backup or manually set passwords.",
+                        username
+                    ));
+                }
+            } else {
                 return Err(format!(
-                    "Missing password_hash for user '{}' in backup",
+                    "User '{}' in backup is missing password_hash — this backup was created after password hashes were excluded for security. Cannot restore users from this backup. Use the last backup that includes password hashes, or manually recreate users.",
                     username
                 ));
             }
-            parsed_users.push((username.to_string(), password_hash.to_string(), role));
         }
         state.auth_config.user_store.clear_users().await;
         for (username, password_hash, role) in &parsed_users {
