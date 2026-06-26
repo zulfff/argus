@@ -24,9 +24,10 @@ pub async fn list_configs(
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<Vec<SyslogConfig>>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Err((StatusCode::FORBIDDEN, Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        )));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
     }
     Ok(Json(state.syslog.list_configs()))
 }
@@ -37,9 +38,10 @@ pub async fn add_config(
     Json(payload): Json<CreateConfigRequest>,
 ) -> Result<Json<SyslogConfig>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_write() {
-        return Err((StatusCode::FORBIDDEN, Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        )));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
     }
     let config = SyslogConfig {
         id: uuid::Uuid::nil(),
@@ -52,7 +54,10 @@ pub async fn add_config(
     let id = state.syslog.add_config(config);
     let configs = state.syslog.list_configs();
     let created = configs.into_iter().find(|c| c.id == id).ok_or_else(|| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Failed to create config", "code": 500})))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "Failed to create config", "code": 500})),
+        )
     })?;
     Ok(Json(created))
 }
@@ -63,15 +68,17 @@ pub async fn remove_config(
     Path(id): Path<uuid::Uuid>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_delete() {
-        return Err((StatusCode::FORBIDDEN, Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        )));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
     }
     if state.syslog.remove_config(&id) {
         Ok(Json(serde_json::json!({"deleted": id.to_string()})))
     } else {
-        Err((StatusCode::NOT_FOUND, Json(
-            serde_json::json!({"error": "Config not found", "code": 404}),
-        )))
+        Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Config not found", "code": 404})),
+        ))
     }
 }

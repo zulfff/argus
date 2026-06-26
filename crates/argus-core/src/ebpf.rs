@@ -234,9 +234,10 @@ impl EbpfController {
             let map_ref = bpf
                 .map("PER_CPU_PACKETS")
                 .ok_or_else(|| ArgusError::Internal("PER_CPU_PACKETS map not found".into()))?;
-            let per_cpu_array: aya::maps::PerCpuArray<_, u64> = aya::maps::PerCpuArray::try_from(map_ref)
-                .map_err(|e| ArgusError::External(format!("PerCpuArray access: {}", e)))?;
-            
+            let per_cpu_array: aya::maps::PerCpuArray<_, u64> =
+                aya::maps::PerCpuArray::try_from(map_ref)
+                    .map_err(|e| ArgusError::External(format!("PerCpuArray access: {}", e)))?;
+
             let mut stats = vec![0u64; 4];
             for idx in 0..4 {
                 if let Ok(values) = per_cpu_array.get(&(idx as u32), 0) {
@@ -257,7 +258,7 @@ impl EbpfController {
                 .ok_or_else(|| ArgusError::Internal("CONNTRACK map not found".into()))?;
             let hashmap: aya::maps::HashMap<_, u64, u32> = aya::maps::HashMap::try_from(map_ref)
                 .map_err(|e| ArgusError::External(format!("HashMap access: {}", e)))?;
-            
+
             let mut count = 0usize;
             for _ in hashmap.keys() {
                 count += 1;

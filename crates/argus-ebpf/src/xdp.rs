@@ -38,7 +38,7 @@ unsafe fn try_argus_firewall(ctx: XdpContext) -> Result<u32, u32> {
     let eth_hdr = data as *const EthHdr;
     let ether_type =
         unsafe { core::ptr::read_unaligned(core::ptr::addr_of!((*eth_hdr).ether_type)) };
-    
+
     match ether_type {
         EtherType::Ipv4 => handle_ipv4(ctx, data, data_end),
         EtherType::Ipv6 => handle_ipv6(ctx, data, data_end),
@@ -57,7 +57,7 @@ unsafe fn handle_ipv4(_ctx: XdpContext, data: usize, data_end: usize) -> Result<
     let version_ihl = unsafe { *(data as *const u8).add(ETH_HDR_LEN) };
     let ihl = (version_ihl & 0x0F) as usize;
     let ip_hdr_len = ihl * 4;
-    
+
     if ip_hdr_len < 20 || data + ETH_HDR_LEN + ip_hdr_len > data_end {
         return Ok(xdp_action::XDP_PASS);
     }
@@ -65,7 +65,7 @@ unsafe fn handle_ipv4(_ctx: XdpContext, data: usize, data_end: usize) -> Result<
     let src_ip = u32::from_be_bytes(ip_hdr.src_addr);
     let dst_ip = u32::from_be_bytes(ip_hdr.dst_addr);
     let protocol_byte = unsafe { *(data as *const u8).add(ETH_HDR_LEN + 9) };
-    
+
     let frag_off_bytes = unsafe {
         [
             *(data as *const u8).add(ETH_HDR_LEN + 6),

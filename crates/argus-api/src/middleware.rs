@@ -27,7 +27,10 @@ pub async fn auth_middleware(
     Ok(next.run(request).await)
 }
 
-pub fn extract_client_ip(headers: &axum::http::HeaderMap, addr: Option<SocketAddr>) -> Option<String> {
+pub fn extract_client_ip(
+    headers: &axum::http::HeaderMap,
+    addr: Option<SocketAddr>,
+) -> Option<String> {
     if let Some(forwarded) = headers.get("x-forwarded-for") {
         if let Ok(s) = forwarded.to_str() {
             if let Some(first) = s.split(',').next() {

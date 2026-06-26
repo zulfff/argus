@@ -373,10 +373,9 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/health", axum::routing::get(|| async { "OK" }))
         .route(
             "/api/v1/auth/login",
-            axum::routing::post(routes::auth_routes::login)
-                .layer(GovernorLayer {
-                    config: login_governor_config,
-                }),
+            axum::routing::post(routes::auth_routes::login).layer(GovernorLayer {
+                config: login_governor_config,
+            }),
         )
         .route(
             "/api/v1/auth/refresh",
@@ -831,7 +830,10 @@ async fn try_main() -> anyhow::Result<()> {
 
             axum_server::bind_rustls(addr, config)
                 .handle(handle)
-                .serve(app.clone().into_make_service_with_connect_info::<std::net::SocketAddr>())
+                .serve(
+                    app.clone()
+                        .into_make_service_with_connect_info::<std::net::SocketAddr>(),
+                )
                 .await
                 .map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
         }
@@ -850,9 +852,12 @@ async fn try_main() -> anyhow::Result<()> {
             eprintln!("  Set ARGUS_TLS_CERT and ARGUS_TLS_KEY env vars for TLS");
             eprintln!("  ========================================");
             eprintln!();
-            axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>())
-                .with_graceful_shutdown(shutdown_signal())
-                .await?;
+            axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+            )
+            .with_graceful_shutdown(shutdown_signal())
+            .await?;
         }
     }
 

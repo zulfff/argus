@@ -44,7 +44,9 @@ pub async fn submit_request(
             if !trimmed.is_empty() && argus_common::net::validate_cidr(trimmed).is_err() {
                 return Err((
                     StatusCode::BAD_REQUEST,
-                    Json(serde_json::json!({"error": format!("Invalid CIDR in allowed_ips: {}", trimmed), "code": 400})),
+                    Json(
+                        serde_json::json!({"error": format!("Invalid CIDR in allowed_ips: {}", trimmed), "code": 400}),
+                    ),
                 ));
             }
         }
@@ -106,7 +108,9 @@ pub async fn approve_request(
     } else {
         Err((
             StatusCode::NOT_FOUND,
-            Json(serde_json::json!({"error": "Request not found or not in pending state", "code": 404})),
+            Json(
+                serde_json::json!({"error": "Request not found or not in pending state", "code": 404}),
+            ),
         ))
     }
 }
@@ -129,7 +133,9 @@ pub async fn deny_request(
     } else {
         Err((
             StatusCode::NOT_FOUND,
-            Json(serde_json::json!({"error": "Request not found or not in pending state", "code": 404})),
+            Json(
+                serde_json::json!({"error": "Request not found or not in pending state", "code": 404}),
+            ),
         ))
     }
 }
@@ -152,7 +158,9 @@ pub async fn revoke_request(
     } else {
         Err((
             StatusCode::NOT_FOUND,
-            Json(serde_json::json!({"error": "Request not found or not in active/approved state", "code": 404})),
+            Json(
+                serde_json::json!({"error": "Request not found or not in active/approved state", "code": 404}),
+            ),
         ))
     }
 }
@@ -174,7 +182,9 @@ pub async fn download_config(
         if !claims.role.can_manage_users() && peer.user_id != claims.username {
             return Err((
                 StatusCode::FORBIDDEN,
-                Json(serde_json::json!({"error": "Cannot download config for another user's request", "code": 403})),
+                Json(
+                    serde_json::json!({"error": "Cannot download config for another user's request", "code": 403}),
+                ),
             ));
         }
     }

@@ -608,7 +608,10 @@ mod tests {
         assert_eq!(refreshed.role, "admin");
 
         let reuse_result = auth.refresh_access_token(&tokens.refresh_token);
-        assert!(reuse_result.is_err(), "reused refresh token should be rejected");
+        assert!(
+            reuse_result.is_err(),
+            "reused refresh token should be rejected"
+        );
     }
 
     #[test]
@@ -626,7 +629,10 @@ mod tests {
 
         let tokens = auth.generate_tokens(&user).unwrap();
         let result = auth.refresh_access_token(&tokens.access_token);
-        assert!(result.is_err(), "access token should not work as refresh token");
+        assert!(
+            result.is_err(),
+            "access token should not work as refresh token"
+        );
     }
 
     #[test]

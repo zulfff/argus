@@ -22,9 +22,10 @@ pub async fn get_drift_status(
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<DriftStatusResponse>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Err((StatusCode::FORBIDDEN, Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        )));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
     }
 
     match &state.drift_detector {
@@ -65,9 +66,10 @@ pub async fn trigger_reconciliation(
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<ReconciliationResponse>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_write() {
-        return Err((StatusCode::FORBIDDEN, Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        )));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
     }
 
     match &state.drift_detector {
@@ -100,9 +102,10 @@ pub async fn get_netbox_devices(
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Err((StatusCode::FORBIDDEN, Json(
-            serde_json::json!({"error": "Insufficient permissions"}),
-        )));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions"})),
+        ));
     }
 
     match &state.netbox_client {

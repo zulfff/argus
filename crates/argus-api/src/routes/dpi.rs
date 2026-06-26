@@ -23,9 +23,10 @@ pub async fn identify(
     Json(payload): Json<IdentifyRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Err((StatusCode::FORBIDDEN, Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        )));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
     }
 
     let direction = match payload.direction.as_deref() {

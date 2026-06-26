@@ -27,9 +27,10 @@ pub async fn generate_report(
     Json(payload): Json<GenerateRequest>,
 ) -> Result<Json<ComplianceReport>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_write() {
-        return Err((StatusCode::FORBIDDEN, Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        )));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
     }
     let report =
         state
@@ -44,9 +45,10 @@ pub async fn list_reports(
     Query(params): Query<ListParams>,
 ) -> Result<Json<Vec<ComplianceReport>>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Err((StatusCode::FORBIDDEN, Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        )));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
     }
     let limit = params.limit.unwrap_or(50);
     Ok(Json(state.compliance.list_reports(limit)))
@@ -58,14 +60,16 @@ pub async fn get_report(
     Path(id): Path<uuid::Uuid>,
 ) -> Result<Json<ComplianceReport>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Err((StatusCode::FORBIDDEN, Json(
-            serde_json::json!({"error": "Insufficient permissions", "code": 403}),
-        )));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
     }
     match state.compliance.get_report(&id) {
         Some(report) => Ok(Json(report)),
-        None => Err((StatusCode::NOT_FOUND, Json(
-            serde_json::json!({"error": "Report not found", "code": 404}),
-        ))),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Report not found", "code": 404})),
+        )),
     }
 }

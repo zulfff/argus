@@ -354,9 +354,7 @@ async fn restore_from_snapshot(
                 "operator" => crate::auth::Role::Operator,
                 _ => crate::auth::Role::Viewer,
             };
-            let password_hash = user_val
-                .get("password_hash")
-                .and_then(|v| v.as_str());
+            let password_hash = user_val.get("password_hash").and_then(|v| v.as_str());
             if let Some(hash) = password_hash {
                 if !hash.is_empty() {
                     parsed_users.push((username.to_string(), hash.to_string(), role));

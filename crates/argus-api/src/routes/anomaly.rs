@@ -9,9 +9,10 @@ pub async fn get_baseline(
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Err((StatusCode::FORBIDDEN, Json(
-            serde_json::json!({"error": "Insufficient permissions"}),
-        )));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions"})),
+        ));
     }
 
     match state.anomaly_detector.get_baseline("all-interfaces") {
@@ -38,9 +39,10 @@ pub async fn get_anomaly_alerts(
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if !claims.role.can_read() {
-        return Err((StatusCode::FORBIDDEN, Json(
-            serde_json::json!({"error": "Insufficient permissions"}),
-        )));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions"})),
+        ));
     }
 
     let alerts = state.anomaly_detector.get_recent_alerts(100);

@@ -26,15 +26,12 @@ pub async fn block_ip(
         ));
     }
 
-    let ip: std::net::IpAddr = req
-        .ip
-        .parse()
-        .map_err(|e| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({"error": format!("invalid IP: {}", e)})),
-            )
-        })?;
+    let ip: std::net::IpAddr = req.ip.parse().map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": format!("invalid IP: {}", e)})),
+        )
+    })?;
 
     state.scan_detector.manual_block(ip);
 
