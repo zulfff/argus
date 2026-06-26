@@ -118,12 +118,9 @@ impl AnsibleRunner {
             .playbook_dir
             .canonicalize()
             .map_err(|e| ArgusError::Config(format!("invalid playbook directory: {}", e)))?;
-        let canonical_target = playbook_path.canonicalize().map_err(|_| {
-            ArgusError::Config(format!(
-                "playbook not found: {}",
-                job.playbook
-            ))
-        })?;
+        let canonical_target = playbook_path
+            .canonicalize()
+            .map_err(|_| ArgusError::Config(format!("playbook not found: {}", job.playbook)))?;
 
         if !canonical_target.starts_with(&canonical_base) {
             return Err(ArgusError::Validation(

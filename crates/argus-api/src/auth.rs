@@ -621,13 +621,30 @@ mod tests {
 
         let tokens = auth.generate_tokens(&user).unwrap();
 
-        let refreshed = auth.refresh_access_token(&tokens.refresh_token).unwrap();
-        assert_eq!(refreshed.role, "admin");
+        let refreshed1 = auth.refresh_access_token(&tokens.refresh_token).unwrap();
+        assert_eq!(refreshed1.role, "admin");
 
-        let reuse_result = auth.refresh_access_token(&tokens.refresh_token);
+        let reuse_within_grace = auth.refresh_access_token(&tokens.refresh_token);
         assert!(
-            reuse_result.is_err(),
-            "reused refresh token should be rejected"
+            reuse_within_grace.is_ok(),
+            "refresh token reuse within grace period should succeed (prevents false positives from network retries)"
+        );
+
+        let refreshed2 = auth.refresh_access_token(&refreshed1.refresh_token).unwrap();
+        assert_eq!(refreshed2.role, "admin");
+
+        std::thread::sleep(std::time::Duration::from_secs(6));
+
+        let reuse_old_after_grace = auth.refresh_access_token(&tokens.refresh_token);
+        assert!(
+            reuse_old_after_grace.is_err(),
+            "refresh token reuse after grace period should be rejected and revoke family"
+        );
+
+        let family_revoked = auth.refresh_access_token(&refreshed2.refresh_token);
+        assert!(
+            family_revoked.is_err(),
+            "all tokens in family should be revoked after reuse detection"
         );
     }
 
