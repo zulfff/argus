@@ -699,6 +699,13 @@ async fn try_main() -> anyhow::Result<()> {
             scan_detector.gc();
         }
     });
+    let jwt_auth_gc = state.auth_config.jwt_auth.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+            jwt_auth_gc.gc_token_families();
+        }
+    });
     info!("GC background tasks started");
 
     let anomaly_detector_bg = anomaly_detector.clone();

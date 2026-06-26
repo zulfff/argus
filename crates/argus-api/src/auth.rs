@@ -21,6 +21,7 @@ use zeroize::Zeroizing;
 
 const ACCESS_TOKEN_EXPIRY_SECS: usize = 900;
 const REFRESH_TOKEN_EXPIRY_SECS: usize = 86400;
+const REFRESH_TOKEN_REUSE_GRACE_SECS: u64 = 5;
 
 fn hash_password(password: &str) -> Result<String, String> {
     let salt = SaltString::generate(&mut OsRng);
@@ -312,7 +313,7 @@ impl Default for UserStore {
 pub struct JwtAuth {
     encoding_key: EncodingKey,
     decoding_key: DecodingKey,
-    used_refresh_tokens: Arc<std::sync::Mutex<HashSet<String>>>,
+    used_refresh_tokens: Arc<std::sync::Mutex<HashMap<String, std::time::SystemTime>>>,
     revoked_families: Arc<std::sync::Mutex<HashSet<String>>>,
 }
 
@@ -321,7 +322,7 @@ impl JwtAuth {
         Self {
             encoding_key: EncodingKey::from_secret(secret),
             decoding_key: DecodingKey::from_secret(secret),
-            used_refresh_tokens: Arc::new(std::sync::Mutex::new(HashSet::new())),
+            used_refresh_tokens: Arc::new(std::sync::Mutex::new(HashMap::new())),
             revoked_families: Arc::new(std::sync::Mutex::new(HashSet::new())),
         }
     }
@@ -417,22 +418,29 @@ impl JwtAuth {
             }
         }
 
-        // Check for refresh token reuse
+        // Check for refresh token reuse with grace period
         {
             let mut used = match self.used_refresh_tokens.lock() {
                 Ok(u) => u,
                 Err(_) => return Err("internal error".to_string()),
             };
-            if used.contains(&claims.jti) {
-                // Reuse detected — revoke entire family
-                let mut revoked = match self.revoked_families.lock() {
-                    Ok(r) => r,
-                    Err(_) => return Err("internal error".to_string()),
-                };
-                revoked.insert(claims.sub.clone());
-                return Err("refresh token reused — family revoked".to_string());
+            if let Some(&first_use) = used.get(&claims.jti) {
+                let now = std::time::SystemTime::now();
+                let elapsed = now
+                    .duration_since(first_use)
+                    .unwrap_or(std::time::Duration::from_secs(999));
+
+                if elapsed.as_secs() > REFRESH_TOKEN_REUSE_GRACE_SECS {
+                    let mut revoked = match self.revoked_families.lock() {
+                        Ok(r) => r,
+                        Err(_) => return Err("internal error".to_string()),
+                    };
+                    revoked.insert(claims.sub.clone());
+                    return Err("refresh token reused — family revoked".to_string());
+                }
+            } else {
+                used.insert(claims.jti.clone(), std::time::SystemTime::now());
             }
-            used.insert(claims.jti.clone());
         }
 
         let now = std::time::SystemTime::now()
@@ -483,6 +491,15 @@ impl JwtAuth {
 
     pub fn gc_token_families(&self) {
         if let Ok(mut used) = self.used_refresh_tokens.lock() {
+            let now = std::time::SystemTime::now();
+            let cutoff = REFRESH_TOKEN_EXPIRY_SECS as u64;
+
+            used.retain(|_, &mut timestamp| {
+                now.duration_since(timestamp)
+                    .map(|d| d.as_secs() < cutoff)
+                    .unwrap_or(false)
+            });
+
             if used.len() > 100_000 {
                 used.clear();
             }

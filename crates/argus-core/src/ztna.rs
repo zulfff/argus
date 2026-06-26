@@ -153,19 +153,6 @@ impl ZtnaMesh {
             config.push_str(&format!("DNS = {}\n", dns));
         }
 
-        for cmd in &iface.pre_up {
-            config.push_str(&format!("PreUp = {}\n", cmd));
-        }
-        for cmd in &iface.post_up {
-            config.push_str(&format!("PostUp = {}\n", cmd));
-        }
-        for cmd in &iface.pre_down {
-            config.push_str(&format!("PreDown = {}\n", cmd));
-        }
-        for cmd in &iface.post_down {
-            config.push_str(&format!("PostDown = {}\n", cmd));
-        }
-
         config.push('\n');
 
         for peer in peers.values() {

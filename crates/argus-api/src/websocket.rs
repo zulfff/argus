@@ -3,7 +3,7 @@ use axum::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         Query, State,
     },
-    http::StatusCode,
+    http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
@@ -90,14 +90,33 @@ pub struct WsQuery {
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Query(query): Query<WsQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let token = query.token.ok_or_else(|| {
-        (
+    let token = if let Some(auth_header) = headers.get(header::AUTHORIZATION) {
+        let auth_str = auth_header.to_str().map_err(|_| {
+            (
+                StatusCode::UNAUTHORIZED,
+                "Invalid Authorization header".into(),
+            )
+        })?;
+        if let Some(bearer_token) = auth_str.strip_prefix("Bearer ") {
+            bearer_token.to_string()
+        } else {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                "Authorization header must use Bearer scheme".into(),
+            ));
+        }
+    } else if let Some(token) = query.token {
+        warn!("WebSocket using deprecated query string authentication. Use Authorization header instead.");
+        token
+    } else {
+        return Err((
             StatusCode::UNAUTHORIZED,
-            "Missing token query parameter".into(),
-        )
-    })?;
+            "Missing token in Authorization header or query parameter".into(),
+        ));
+    };
 
     let jwt = &state.auth_config.jwt_auth;
     let _claims = jwt

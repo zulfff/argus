@@ -215,5 +215,15 @@ fn validate_notification_url(url: &str) -> Result<(), String> {
         }
     }
 
+    if let Ok(addr) = host.parse::<std::net::Ipv6Addr>() {
+        if addr.is_loopback() || addr.is_unspecified() {
+            return Err("URL pointing to loopback/unspecified IPv6 is not allowed".to_string());
+        }
+    }
+
+    if lowered.contains("internal") || lowered.contains("local") || lowered.ends_with(".local") {
+        return Err("URL with 'internal' or '.local' domain is not allowed".to_string());
+    }
+
     Ok(())
 }

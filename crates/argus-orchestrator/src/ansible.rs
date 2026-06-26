@@ -105,7 +105,32 @@ impl AnsibleRunner {
 
     #[instrument(skip(self, job))]
     pub async fn execute_job(&self, job: &AnsibleJob) -> Result<PlaybookResult> {
+        if job.playbook.contains("..") || job.playbook.contains('/') || job.playbook.contains('\\')
+        {
+            return Err(ArgusError::Validation(
+                "playbook name cannot contain path separators or '..'".into(),
+            ));
+        }
+
         let playbook_path = self.playbook_dir.join(&job.playbook);
+
+        let canonical_base = self
+            .playbook_dir
+            .canonicalize()
+            .map_err(|e| ArgusError::Config(format!("invalid playbook directory: {}", e)))?;
+        let canonical_target = playbook_path.canonicalize().map_err(|_| {
+            ArgusError::Config(format!(
+                "playbook not found: {}",
+                job.playbook
+            ))
+        })?;
+
+        if !canonical_target.starts_with(&canonical_base) {
+            return Err(ArgusError::Validation(
+                "playbook path escapes base directory".into(),
+            ));
+        }
+
         if !playbook_path.exists() {
             return Err(ArgusError::Config(format!(
                 "playbook not found: {}",
