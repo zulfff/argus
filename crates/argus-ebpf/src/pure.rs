@@ -9,13 +9,7 @@
 /// to a `#[repr(C)]` 16-byte struct key when a userspace consumer needs to
 /// reconstruct the tuple from the key. No consumer reads CONNTRACK today.
 #[inline(always)]
-pub fn pack_conn_key(
-    src_ip: u32,
-    dst_ip: u32,
-    src_port: u16,
-    dst_port: u16,
-    protocol: u8,
-) -> u64 {
+pub fn pack_conn_key(src_ip: u32, dst_ip: u32, src_port: u16, dst_port: u16, protocol: u8) -> u64 {
     const FNV_OFFSET: u64 = 0xcbf29ce484222325;
     const FNV_PRIME: u64 = 0x100000001b3;
 
@@ -100,6 +94,10 @@ mod tests {
         for port in 8080u16..8080 + 256 {
             keys.insert(old(0x0A000001, 0x0A000002, 12345, port, 6));
         }
-        assert_eq!(keys.len(), 2, "old layout should collide 256 ports into 2 keys");
+        assert_eq!(
+            keys.len(),
+            2,
+            "old layout should collide 256 ports into 2 keys"
+        );
     }
 }

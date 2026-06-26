@@ -49,7 +49,10 @@ fn map_name_for_action(action: &Action, is_src: bool) -> &'static str {
 /// exactly. Anything else (unset, empty, "allow", typos) → fail-open, so a
 /// freshly-attached firewall never locks the operator out of their own box.
 fn default_deny_enabled(env_value: Option<&str>) -> bool {
-    matches!(env_value.map(|v| v.trim().to_ascii_lowercase()).as_deref(), Some("deny"))
+    matches!(
+        env_value.map(|v| v.trim().to_ascii_lowercase()).as_deref(),
+        Some("deny")
+    )
 }
 
 impl EbpfController {
@@ -79,9 +82,7 @@ impl EbpfController {
         let xdp_name = "argus_firewall";
         let xdp: &mut Xdp = bpf
             .program_mut(xdp_name)
-            .ok_or_else(|| {
-                ArgusError::NotFound(format!("XDP program '{}' not found", xdp_name))
-            })?
+            .ok_or_else(|| ArgusError::NotFound(format!("XDP program '{}' not found", xdp_name)))?
             .try_into()
             .map_err(|_| ArgusError::Internal("program is not XDP type".into()))?;
 
@@ -118,9 +119,7 @@ impl EbpfController {
 
             allowlist
                 .insert(&Key::new(32, 0u32), 1, 0)
-                .map_err(|e| {
-                    ArgusError::External(format!("insert marker into {}: {}", name, e))
-                })?;
+                .map_err(|e| ArgusError::External(format!("insert marker into {}: {}", name, e)))?;
         }
 
         info!("Allowlist mode markers inserted into eBPF (SRC_ALLOWLIST + DST_ALLOWLIST)");
@@ -155,11 +154,7 @@ impl EbpfController {
         self.with_bpf(|bpf| self.sync_rule(bpf, rule, false))
     }
 
-    pub fn sync_rule_update(
-        &self,
-        old_rule: &CidrRule,
-        new_rule: &CidrRule,
-    ) -> Result<()> {
+    pub fn sync_rule_update(&self, old_rule: &CidrRule, new_rule: &CidrRule) -> Result<()> {
         if !self.loaded {
             return Ok(());
         }
@@ -203,7 +198,10 @@ impl EbpfController {
         add: bool,
     ) -> Result<()> {
         if cidr.contains(':') {
-            warn!("IPv6 CIDR rules not yet supported in eBPF data plane: {}", cidr);
+            warn!(
+                "IPv6 CIDR rules not yet supported in eBPF data plane: {}",
+                cidr
+            );
             return Ok(());
         }
 
@@ -266,7 +264,15 @@ mod tests {
         assert_eq!(map_name_for_action(&Action::Deny, false), "DST_BLOCKLIST");
         assert_eq!(map_name_for_action(&Action::Allow, true), "SRC_ALLOWLIST");
         assert_eq!(map_name_for_action(&Action::Allow, false), "DST_ALLOWLIST");
-        assert_eq!(map_name_for_action(&Action::RateLimit { packets_per_second: 10 }, true), "SRC_ALLOWLIST");
+        assert_eq!(
+            map_name_for_action(
+                &Action::RateLimit {
+                    packets_per_second: 10
+                },
+                true
+            ),
+            "SRC_ALLOWLIST"
+        );
     }
 
     #[test]
@@ -278,10 +284,16 @@ mod tests {
 
     #[test]
     fn test_default_mode_is_fail_open() {
-        assert!(!default_deny_enabled(None), "unset must be fail-open (allow)");
+        assert!(
+            !default_deny_enabled(None),
+            "unset must be fail-open (allow)"
+        );
         assert!(!default_deny_enabled(Some("")), "empty must be fail-open");
         assert!(!default_deny_enabled(Some("allow")));
-        assert!(!default_deny_enabled(Some("nonsense")), "typo must be fail-open");
+        assert!(
+            !default_deny_enabled(Some("nonsense")),
+            "typo must be fail-open"
+        );
         assert!(default_deny_enabled(Some("deny")), "explicit deny opt-in");
         assert!(default_deny_enabled(Some("DENY")), "case-insensitive deny");
         assert!(default_deny_enabled(Some(" deny ")), "trimmed deny");

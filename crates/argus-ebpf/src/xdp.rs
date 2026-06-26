@@ -35,7 +35,8 @@ unsafe fn try_argus_firewall(ctx: XdpContext) -> Result<u32, u32> {
     }
 
     let eth_hdr = data as *const EthHdr;
-    let ether_type = unsafe { core::ptr::read_unaligned(core::ptr::addr_of!((*eth_hdr).ether_type)) };
+    let ether_type =
+        unsafe { core::ptr::read_unaligned(core::ptr::addr_of!((*eth_hdr).ether_type)) };
     if ether_type != EtherType::Ipv4 {
         return Ok(xdp_action::XDP_PASS);
     }
@@ -110,12 +111,12 @@ fn check_rate_limit(src_ip: u32) -> bool {
     let now_ns = unsafe { aya_ebpf::helpers::bpf_ktime_get_ns() };
 
     let bucket = match RATE_LIMIT_BUCKETS.get_ptr_mut(&src_ip) {
-            Some(ptr) => ptr,
-            None => {
-                let _ = RATE_LIMIT_BUCKETS.insert(&src_ip, &MAX_TOKENS, 0);
-                return true;
-            }
-        };
+        Some(ptr) => ptr,
+        None => {
+            let _ = RATE_LIMIT_BUCKETS.insert(&src_ip, &MAX_TOKENS, 0);
+            return true;
+        }
+    };
 
     let value = unsafe { *bucket };
     let tokens = value & 0xFFFFFFFF;

@@ -23,20 +23,20 @@ use argus_core::cluster::ClusterManager;
 use argus_core::compliance::ComplianceEngine;
 use argus_core::connection_tracker::ConnectionTracker;
 use argus_core::dpi::DpiEngine;
+use argus_core::ebpf::EbpfController;
 use argus_core::qos::QosManager;
 use argus_core::rate_limiter::RateLimiter;
 use argus_core::reputation::ReputationManager;
 use argus_core::rule_engine::RuleEngine;
 use argus_core::scanner::ScanDetector;
 use argus_core::scheduler::SchedulerEngine;
-use argus_core::ebpf::EbpfController;
 use argus_core::syslog::SyslogForwarder;
 use argus_core::tenancy::TenantManager;
 use argus_core::vpn_portal::VpnPortalManager;
 use argus_core::ztna::ZtnaMesh;
+use argus_observability::metrics::ArgusMetrics;
 use argus_orchestrator::drift::DriftDetector;
 use argus_orchestrator::netbox::NetboxClient;
-use argus_observability::metrics::ArgusMetrics;
 
 use crate::auth::{AuthConfig, Role};
 use crate::db_audit_store::PostgresAuditStore;
@@ -477,8 +477,8 @@ async fn try_main() -> anyhow::Result<()> {
     }
 
     let mut ebpf_controller = EbpfController::new();
-    let ebf_obj_path = std::env::var("ARGUS_EBPF_OBJECT")
-        .unwrap_or_else(|_| "/var/lib/argus/argus-ebpf.o".into());
+    let ebf_obj_path =
+        std::env::var("ARGUS_EBPF_OBJECT").unwrap_or_else(|_| "/var/lib/argus/argus-ebpf.o".into());
     if let Ok(wan_iface) = std::env::var("ARGUS_WAN_IFACE") {
         if let Err(e) = ebpf_controller.init(&ebf_obj_path, &wan_iface) {
             warn!("eBPF init failed: {} — eBPF data plane disabled", e);
@@ -709,7 +709,10 @@ async fn try_main() -> anyhow::Result<()> {
                     wan_failed_over: false,
                     rule_match_counts: std::collections::HashMap::new(),
                 };
-                snapshot.anomaly_score = alerts.iter().map(|a| a.deviation_multiple).fold(0.0, f64::max);
+                snapshot.anomaly_score = alerts
+                    .iter()
+                    .map(|a| a.deviation_multiple)
+                    .fold(0.0, f64::max);
                 alert_manager_bg.evaluate(&snapshot).await;
             }
             anomaly_detector_bg.gc();

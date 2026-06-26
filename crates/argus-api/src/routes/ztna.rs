@@ -13,7 +13,9 @@ pub async fn download_wg_config(
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<serde_json::Value>, Json<serde_json::Value>> {
     if !claims.role.can_read() {
-        return Err(Json(serde_json::json!({"error": "Insufficient permissions"})));
+        return Err(Json(
+            serde_json::json!({"error": "Insufficient permissions"}),
+        ));
     }
 
     match state.ztna_mesh.generate_wg_config(&iface_name) {
