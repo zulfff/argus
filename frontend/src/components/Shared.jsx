@@ -38,11 +38,11 @@ export default function Badge({ variant, children }) {
 export function Toggle({ checked, onChange }) {
   return (
     <div
-      className={`w-[34px] h-[18px] rounded-full cursor-pointer relative shrink-0 transition-colors ${checked ? 'bg-[var(--color-green-400)]' : 'bg-[var(--color-bg-border)]'}`}
+      className={`w-11 h-6 rounded-full cursor-pointer relative shrink-0 transition-colors ${checked ? 'bg-[var(--color-primary)]' : 'bg-gray-200'}`}
       onClick={onChange} role="switch" aria-checked={checked} tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onChange?.()}
     >
-      <div className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-all ${checked ? 'left-[18px]' : 'left-[2px]'}`} />
+      <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${checked ? 'left-5' : 'left-0.5'}`} />
     </div>
   );
 }
@@ -50,11 +50,11 @@ export function Toggle({ checked, onChange }) {
 export function Modal({ open, onClose, title, children }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[rgba(0,8,4,0.75)] backdrop-blur-sm animate-[modalFadeIn_.15s_ease]" onClick={onClose}>
-      <div className="bg-[var(--color-bg-panel)] rounded-lg border border-[var(--color-bg-border)] p-5 min-w-[460px] max-w-[600px] max-h-[80vh] overflow-y-auto shadow-[0_8px_40px_rgba(0,0,0,0.6)] animate-[modalIn_.15s_ease]" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-[15px] font-semibold text-[var(--color-text)] m-0">{title}</h2>
-          <button className="bg-none border-none text-[var(--color-text-sec)] cursor-pointer text-base p-1 leading-none hover:text-[var(--color-text)]" onClick={onClose} aria-label="Close">✕</button>
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-[modalFadeIn_.2s_ease]" onClick={onClose}>
+      <div className="bg-white rounded-xl border border-[var(--color-bg-border)] p-6 min-w-[500px] max-w-[600px] max-h-[85vh] overflow-y-auto shadow-[var(--shadow-lg)] animate-[modalIn_.2s_ease]" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-5">
+          <h2 className="text-lg font-semibold text-[var(--color-text)]">{title}</h2>
+          <button className="bg-none border-none text-[var(--color-text-muted)] cursor-pointer text-xl p-1 leading-none hover:text-[var(--color-text)] transition-colors rounded-lg hover:bg-[var(--color-bg-hover)]" onClick={onClose} aria-label="Close">×</button>
         </div>
         {children}
       </div>
@@ -64,21 +64,21 @@ export function Modal({ open, onClose, title, children }) {
 
 export function PageHeader({ title, subtitle, children }) {
   return (
-    <div className="flex justify-between items-start mb-4 animate-fade">
+    <div className="flex justify-between items-start mb-6 animate-fade">
       <div>
-        <h1 className="text-lg font-semibold text-[var(--color-text)] m-0">{title}</h1>
-        {subtitle && <div className="text-[var(--color-text-sec)] text-[11px] mt-0.5">{subtitle}</div>}
+        <h1 className="text-2xl font-semibold text-[var(--color-text)]">{title}</h1>
+        {subtitle && <div className="text-[var(--color-text-sec)] text-sm mt-1">{subtitle}</div>}
       </div>
-      {children && <div className="flex gap-1.5 items-center">{children}</div>}
+      {children && <div className="flex gap-2 items-center">{children}</div>}
     </div>
   );
 }
 
 export function SkeletonRows({ count = 3, cols = 6 }) {
   return Array.from({ length: count }).map((_, i) => (
-    <div key={i} className="flex gap-3 px-3.5 py-2.5 border-b border-[var(--color-bg-border)]">
+    <div key={i} className="flex gap-4 px-4 py-3 border-b border-[var(--color-bg-border)]">
       {Array.from({ length: cols }).map((_, j) => (
-        <div key={j} className="h-2.5 rounded-[3px] animate-shimmer" style={{ width: [40, 120, 80, 80, 60, 50][j % 6] }} />
+        <div key={j} className="h-4 rounded animate-shimmer" style={{ width: [60, 140, 100, 100, 80, 60][j % 6] }} />
       ))}
     </div>
   ));
@@ -86,30 +86,30 @@ export function SkeletonRows({ count = 3, cols = 6 }) {
 
 export function EmptyState({ msg, action, onAction }) {
   return (
-    <div className="text-center py-10 px-6 text-[var(--color-text-sec)]">
-      <div className="text-[28px] mb-2.5 opacity-50">📭</div>
-      <div className="text-[13px] mb-3.5">{msg}</div>
-      {action && <button className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded bg-[var(--color-green-400)] text-black hover:bg-[var(--color-green-500)] hover:shadow-[0_0_16px_var(--color-green-glow)] transition-all" onClick={onAction}>{action}</button>}
+    <div className="text-center py-16 px-6 text-[var(--color-text-sec)]">
+      <div className="text-5xl mb-4 opacity-40">📭</div>
+      <div className="text-sm mb-4">{msg}</div>
+      {action && <button className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] shadow-[var(--shadow-sm)] transition-all" onClick={onAction}>{action}</button>}
     </div>
   );
 }
 
 export function LoadingError({ message, onRetry }) {
   return (
-    <div className="text-center py-10 px-6 text-[var(--color-text-sec)]">
-      <div className="text-[28px] mb-2.5 opacity-50">⚠️</div>
-      <div className="text-[13px] mb-3.5 text-[var(--color-red-400)]">{message || 'Failed to load data'}</div>
-      {onRetry && <button className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded bg-[var(--color-green-400)] text-black hover:bg-[var(--color-green-500)] hover:shadow-[0_0_16px_var(--color-green-glow)] transition-all" onClick={onRetry}>Retry</button>}
+    <div className="text-center py-16 px-6">
+      <div className="text-5xl mb-4 opacity-40">⚠️</div>
+      <div className="text-sm mb-4 text-[var(--color-danger)]">{message || 'Failed to load data'}</div>
+      {onRetry && <button className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] shadow-[var(--shadow-sm)] transition-all" onClick={onRetry}>Retry</button>}
     </div>
   );
 }
 
 export function Field({ label, error, children, style }) {
   return (
-    <div className="mb-2.5" style={style}>
-      {label && <label className="text-[var(--color-text-sec)] text-[11px] font-medium mb-[3px] block">{label}</label>}
+    <div className="mb-4" style={style}>
+      {label && <label className="text-[var(--color-text)] text-sm font-medium mb-1.5 block">{label}</label>}
       {children}
-      {error && <div className="text-[var(--color-red-400)] text-[10px] mt-0.5">{error}</div>}
+      {error && <div className="text-[var(--color-danger)] text-xs mt-1">{error}</div>}
     </div>
   );
 }

@@ -1,62 +1,72 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-root: #000c04;
-  --color-bg-panel: #001408;
-  --color-bg-elevated: #001c0d;
-  --color-bg-hover: #002413;
-  --color-bg-border: #002e1a;
-  --color-green-400: #00ab44;
-  --color-green-500: #00cc52;
-  --color-green-glow: #00ab4440;
-  --color-green-dim: rgba(0, 171, 68, 0.10);
-  --color-blue-400: #2196f3;
-  --color-red-400: #ef5350;
-  --color-red-glow: #ef535040;
-  --color-red-dim: rgba(239, 83, 80, 0.10);
-  --color-yellow-400: #ffa726;
-  --color-purple-400: #7e57c2;
-  --color-teal-400: #009688;
-  --color-text: #c8cdd0;
-  --color-text-sec: #6d7a84;
-  --color-text-muted: #3a4a55;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-  --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
-  --radius-md: 4px;
+  --color-bg-root: #f8f9fa;
+  --color-bg-panel: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-bg-hover: #f5f6f7;
+  --color-bg-border: #e4e7eb;
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-light: #dbeafe;
+  --color-success: #059669;
+  --color-success-light: #d1fae5;
+  --color-danger: #dc2626;
+  --color-danger-light: #fee2e2;
+  --color-warning: #d97706;
+  --color-warning-light: #fef3c7;
+  --color-info: #0891b2;
+  --color-info-light: #cffafe;
+  --color-text: #111827;
+  --color-text-sec: #6b7280;
+  --color-text-muted: #9ca3af;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Helvetica Neue', sans-serif;
+  --font-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 }
 
 @layer base {
   body {
     background: var(--color-bg-root);
     color: var(--color-text);
-    font-family: var(--font-body);
-    font-size: 13px;
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-  ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--color-bg-border); border-radius: 2px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
 
-  input:focus, select:focus, textarea:focus {
-    border-color: var(--color-green-400) !important;
-    box-shadow: 0 0 0 2px var(--color-green-dim);
-    outline: none;
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  button {
+    cursor: pointer;
+    font-family: inherit;
   }
+
+  input, select, textarea {
+    font-family: inherit;
+  }
+
+  .text-mono { font-family: var(--font-mono); }
 }
 
-@utility text-mono { font-family: var(--font-mono); }
-
-@keyframes slideInRow { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
-@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-@keyframes fadeSlideIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes livePulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.2); } }
-@keyframes modalIn { from { opacity: 0; transform: scale(0.97) translateY(-6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@keyframes slideInRow { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes fadeSlideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes livePulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.1); } }
+@keyframes modalIn { from { opacity: 0; transform: scale(0.98) translateY(-4px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes toastProgress { from { width: 100%; } to { width: 0%; } }
-@keyframes eyeScan { 0%,100% { transform: translateX(-3px); } 50% { transform: translateX(3px); } }
 
-@utility animate-slide-in { animation: slideInRow 0.2s ease; }
-@utility animate-fade { animation: fadeSlideIn 0.25s ease; }
+@utility animate-slide-in { animation: slideInRow 0.15s ease-out; }
+@utility animate-fade { animation: fadeSlideIn 0.2s ease-out; }
 @utility animate-live { animation: livePulse 2s infinite; }
-@utility animate-shimmer { background: linear-gradient(90deg, var(--color-bg-elevated) 25%, var(--color-bg-border) 50%, var(--color-bg-elevated) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+@utility animate-shimmer { 
+  background: linear-gradient(90deg, var(--color-bg-panel) 25%, var(--color-bg-hover) 50%, var(--color-bg-panel) 75%); 
+  background-size: 200% 100%; 
+  animation: shimmer 1.5s infinite; 
+}
+

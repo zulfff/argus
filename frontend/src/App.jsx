@@ -23,17 +23,19 @@ const NAV_ITEMS = [
   { path: '/settings', icon: '⚙', label: 'Settings' },
 ];
 
-const ARGUS_EYE = (
-  <svg width="22" height="22" viewBox="0 0 40 40" className="shrink-0">
-    <circle cx="20" cy="20" r="18" fill="none" stroke="var(--color-green-500)" strokeWidth="2" />
-    <circle cx="20" cy="20" r="10" fill="var(--color-green-dim)" />
-    <ellipse cx="20" cy="20" rx="5" ry="7" fill="var(--color-green-400)" style={{ animation: 'eyeScan 4s ease-in-out infinite' }} />
-    <circle cx="20" cy="20" r="2" fill="var(--color-bg-root)" />
+const ARGUS_ICON = (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="shrink-0">
+    <rect x="3" y="3" width="18" height="18" rx="4" stroke="currentColor" strokeWidth="2"/>
+    <path d="M8 12L11 15L16 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 );
 
 function btnClass(active) {
-  return `flex items-center gap-2 w-full px-3.5 py-2 border-l-2 text-xs transition-all cursor-pointer text-left font-body border-transparent text-[var(--color-text-sec)] hover:bg-[#001a12] hover:text-[var(--color-text)] ${active ? '!border-[var(--color-green-400)] !text-[var(--color-green-500)] !bg-[#001a12]' : ''}`;
+  return `flex items-center gap-3 w-full px-4 py-2.5 text-sm transition-all cursor-pointer text-left rounded-lg mx-2 ${
+    active 
+      ? 'bg-[var(--color-primary)] text-white font-medium shadow-sm' 
+      : 'text-[var(--color-text-sec)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)]'
+  }`;
 }
 
 function Sidebar({ alertCount }) {
@@ -42,37 +44,40 @@ function Sidebar({ alertCount }) {
   const auth = useContext(AuthContext);
 
   return (
-    <div className="w-[200px] bg-[#000a06] border-r border-[var(--color-bg-border)] flex flex-col shrink-0">
-      <div className="flex items-center gap-2 px-3.5 py-4 border-b border-[var(--color-bg-border)] text-[15px] font-bold text-mono tracking-wider">
-        {ARGUS_EYE}
-        <span>ARGUS</span>
+    <div className="w-[240px] bg-[var(--color-bg-panel)] border-r border-[var(--color-bg-border)] flex flex-col shrink-0">
+      <div className="flex items-center gap-3 px-6 py-5 border-b border-[var(--color-bg-border)]">
+        <div className="text-[var(--color-primary)]">{ARGUS_ICON}</div>
+        <span className="text-lg font-semibold text-[var(--color-text)]">Argus</span>
       </div>
-      <nav className="flex-1 py-1">
+      <nav className="flex-1 py-4 space-y-1">
         {NAV_ITEMS.map((item) => (
           <button
             key={item.path}
             onClick={() => navigate(item.path)}
             className={btnClass(location.pathname === item.path)}
           >
-            <span className="text-sm w-[18px] text-center">{item.icon}</span>
-            <span>{item.label}</span>
+            <span className="text-base w-5 text-center">{item.icon}</span>
+            <span className="flex-1">{item.label}</span>
             {item.path === '/alerts' && alertCount > 0 && (
-              <span className="inline-flex items-center rounded-[3px] px-2 py-0.5 text-[10px] font-semibold text-mono bg-[var(--color-red-400)] text-white ml-auto">{alertCount}</span>
+              <span className="inline-flex items-center justify-center min-w-[20px] h-5 rounded-full px-1.5 text-[11px] font-semibold bg-[var(--color-danger)] text-white">{alertCount}</span>
             )}
           </button>
         ))}
       </nav>
-      <div className="px-3.5 py-2.5 border-t border-[var(--color-bg-border)]">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-[26px] h-[26px] rounded-full bg-[var(--color-green-400)] flex items-center justify-center text-black text-[11px] font-bold">
+      <div className="px-4 py-4 border-t border-[var(--color-bg-border)] space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-[var(--color-primary-light)] flex items-center justify-center text-[var(--color-primary)] text-sm font-semibold">
             {auth.user?.username?.[0]?.toUpperCase() || '?'}
           </div>
-          <div>
-            <div className="text-[var(--color-text)] text-[11px]">{auth.user?.username || '...'}</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[var(--color-text)] text-sm font-medium truncate">{auth.user?.username || '...'}</div>
             {auth.user?.role && <Badge variant={auth.user.role}>{auth.user.role}</Badge>}
           </div>
         </div>
-        <button className="w-full inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs rounded bg-transparent text-[var(--color-text-sec)] border border-[var(--color-bg-border)] hover:bg-[var(--color-bg-elevated)] hover:border-[var(--color-text-muted)] transition-all" onClick={auth.logout}>
+        <button 
+          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg bg-transparent text-[var(--color-text-sec)] border border-[var(--color-bg-border)] hover:bg-[var(--color-bg-hover)] hover:border-[var(--color-text-muted)] transition-all font-medium" 
+          onClick={auth.logout}
+        >
           Logout
         </button>
       </div>
@@ -97,8 +102,8 @@ function ProtectedLayout() {
   return (
     <div className="flex h-screen bg-[var(--color-bg-root)]">
       <Sidebar alertCount={alertCount} />
-      <div className="flex-1 p-5 overflow-auto bg-[var(--color-bg-root)]" key={location.pathname}>
-        <div className="animate-fade">
+      <div className="flex-1 p-6 overflow-auto" key={location.pathname}>
+        <div className="animate-fade max-w-[1600px] mx-auto">
           <Outlet />
         </div>
       </div>
