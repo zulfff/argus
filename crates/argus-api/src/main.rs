@@ -75,6 +75,7 @@ pub struct AppState {
     pub ztna_mesh: Arc<ZtnaMesh>,
     pub anomaly_detector: Arc<AnomalyDetector>,
     pub wasm_plugin_engine: Arc<argus_core::wasm_plugin::WasmPluginEngine>,
+    pub is_production: bool,
 }
 
 pub fn app(state: Arc<AppState>) -> Router {
@@ -100,7 +101,10 @@ pub fn app(state: Arc<AppState>) -> Router {
             .filter_map(|s| s.trim().parse::<axum::http::HeaderValue>().ok())
             .collect();
         if origins.is_empty() {
-            warn!("ARGUS_ALLOWED_ORIGINS set but no valid origins parsed, using Any");
+            if state.is_production {
+                panic!("ARGUS_ALLOWED_ORIGINS set but no valid origins parsed in production mode");
+            }
+            warn!("ARGUS_ALLOWED_ORIGINS set but no valid origins parsed, using Any (development)");
             CorsLayer::new()
                 .allow_origin(Any)
                 .allow_methods(Any)
@@ -113,7 +117,10 @@ pub fn app(state: Arc<AppState>) -> Router {
                 .allow_headers(Any)
         }
     } else {
-        warn!("ARGUS_ALLOWED_ORIGINS not set, CORS allows all origins (development mode)");
+        if state.is_production {
+            panic!("ARGUS_ALLOWED_ORIGINS must be set in production mode");
+        }
+        warn!("ARGUS_ALLOWED_ORIGINS not set, CORS allows all origins (development mode only)");
         CorsLayer::new()
             .allow_origin(Any)
             .allow_methods(Any)
@@ -582,6 +589,8 @@ async fn try_main() -> anyhow::Result<()> {
         None
     };
 
+    let is_production = std::env::var("ARGUS_PRODUCTION").is_ok() || db_pool.is_some();
+
     info!("Setting up JWT secret...");
     let jwt_secret = match std::env::var("ARGUS_JWT_SECRET") {
         Ok(s) if s.len() >= 32 => {
@@ -695,6 +704,7 @@ async fn try_main() -> anyhow::Result<()> {
         ztna_mesh,
         anomaly_detector: anomaly_detector.clone(),
         wasm_plugin_engine,
+        is_production,
     });
 
     let scheduler_engine = state.scheduler_engine.clone();
@@ -871,7 +881,15 @@ async fn try_main() -> anyhow::Result<()> {
                 .map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
         }
         _ => {
-            warn!("ARGUS_TLS_CERT and ARGUS_TLS_KEY not both set — using plain HTTP (insecure)");
+            if is_production {
+                error!(
+                    "TLS is mandatory in production mode (ARGUS_PRODUCTION=1 or DATABASE_URL set)"
+                );
+                error!("Set ARGUS_TLS_CERT and ARGUS_TLS_KEY environment variables");
+                error!("Example: ARGUS_TLS_CERT=/path/to/cert.pem ARGUS_TLS_KEY=/path/to/key.pem");
+                anyhow::bail!("TLS required in production");
+            }
+            warn!("ARGUS_TLS_CERT and ARGUS_TLS_KEY not both set — using plain HTTP (insecure, development only)");
             let listener = tokio::net::TcpListener::bind("0.0.0.0:8443").await?;
             info!("Ready. Listening on http://0.0.0.0:8443 (plain HTTP)");
             eprintln!();
@@ -883,6 +901,7 @@ async fn try_main() -> anyhow::Result<()> {
             eprintln!("  ========================================");
             eprintln!("  WARNING: No TLS configured — all traffic in cleartext");
             eprintln!("  Set ARGUS_TLS_CERT and ARGUS_TLS_KEY env vars for TLS");
+            eprintln!("  For production: Set ARGUS_PRODUCTION=1 to enforce TLS");
             eprintln!("  ========================================");
             eprintln!();
             axum::serve(
