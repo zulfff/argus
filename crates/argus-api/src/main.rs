@@ -76,6 +76,8 @@ pub struct AppState {
     pub anomaly_detector: Arc<AnomalyDetector>,
     pub wasm_plugin_engine: Arc<argus_core::wasm_plugin::WasmPluginEngine>,
     pub is_production: bool,
+    pub connection_drainer: Arc<argus_core::connection_draining::ConnectionDrainer>,
+    pub rule_stats_tracker: Arc<argus_core::rule_stats::RuleStatsTracker>,
 }
 
 pub fn app(state: Arc<AppState>) -> Router {
@@ -392,6 +394,38 @@ pub fn app(state: Arc<AppState>) -> Router {
             "/api/v1/ztna/config/{iface}",
             axum::routing::get(routes::ztna::download_wg_config),
         )
+        .route(
+            "/api/v1/health/deep",
+            axum::routing::get(routes::health::deep_health_check),
+        )
+        .route(
+            "/api/v1/rules/bulk",
+            axum::routing::post(routes::bulk_rules::bulk_create_rules),
+        )
+        .route(
+            "/api/v1/rules/bulk/delete",
+            axum::routing::post(routes::bulk_rules::bulk_delete_rules),
+        )
+        .route(
+            "/api/v1/connections/drain",
+            axum::routing::post(routes::connection_draining::start_drain),
+        )
+        .route(
+            "/api/v1/connections/draining",
+            axum::routing::get(routes::connection_draining::list_draining),
+        )
+        .route(
+            "/api/v1/rules/stats",
+            axum::routing::get(routes::rule_stats::get_rule_stats),
+        )
+        .route(
+            "/api/v1/rules/stats/top",
+            axum::routing::get(routes::rule_stats::get_top_rules),
+        )
+        .route(
+            "/api/v1/rules/stats/dead",
+            axum::routing::get(routes::rule_stats::get_dead_rules),
+        )
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             middleware::auth_middleware,
@@ -508,6 +542,8 @@ async fn try_main() -> anyhow::Result<()> {
     let ztna_mesh = Arc::new(ZtnaMesh::new("default"));
     let anomaly_detector = Arc::new(AnomalyDetector::new());
     let wasm_plugin_engine = Arc::new(argus_core::wasm_plugin::WasmPluginEngine::new());
+    let connection_drainer = Arc::new(argus_core::connection_draining::ConnectionDrainer::new());
+    let rule_stats_tracker = Arc::new(argus_core::rule_stats::RuleStatsTracker::new());
 
     if let Some(ct) = Arc::get_mut(&mut connection_tracker) {
         let wasm_engine = wasm_plugin_engine.clone();
@@ -699,6 +735,8 @@ async fn try_main() -> anyhow::Result<()> {
         anomaly_detector: anomaly_detector.clone(),
         wasm_plugin_engine,
         is_production,
+        connection_drainer: connection_drainer.clone(),
+        rule_stats_tracker: rule_stats_tracker.clone(),
     });
 
     let scheduler_engine = state.scheduler_engine.clone();
@@ -784,6 +822,16 @@ async fn try_main() -> anyhow::Result<()> {
         }
     });
     info!("Anomaly detection background task started");
+
+    let drainer_bg = connection_drainer.clone();
+    let tracker_bg = state.connection_tracker.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            drainer_bg.check_and_finalize(&tracker_bg);
+        }
+    });
+    info!("Connection draining background task started");
 
     // Background Postgres audit log sync
     if let Some(ref pg_audit) = db_audit_store {

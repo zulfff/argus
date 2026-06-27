@@ -25,6 +25,11 @@ routers, and full observability — all in Rust, all memory-safe.
 - **WASM Plugin** — wasmtime sandbox, fuel-metered, metadata passed to plugin (hardcoded memory offset; alloc-based memory negotiation upcoming)
 - **Audit Log** — SHA-256 hash-chained, tamper-evident, integrity verification
 - **Multi-WAN Failover** — health-probe based, auto-failback (configured via VyOS, not yet API-driven)
+- **Rule Hit Statistics** — Track rule usage, identify dead rules, top matched rules analytics
+- **Connection Draining** — Gracefully drain connections before blocking IPs (configurable timeout)
+- **Bulk Rule Operations** — Import/update/delete up to 1000 rules per API call for performance
+- **Deep Health Check** — Comprehensive health status for all dependencies (DB, Redis, eBPF, NetBox)
+- **Per-Rule Rate Limiting** — Granular rate limits on individual firewall rules (future: eBPF enforcement)
 
 ## Quick Start
 

@@ -178,6 +178,9 @@ mod tests {
             enabled: true,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            rate_limit_pps: None,
+            hit_count: 0,
+            last_hit: None,
         };
         assert!(RuleEngine::rule_matches(
             &rule,

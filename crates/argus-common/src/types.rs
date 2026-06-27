@@ -33,6 +33,9 @@ pub struct CidrRule {
     pub enabled: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub rate_limit_pps: Option<u64>,
+    pub hit_count: u64,
+    pub last_hit: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,6 +70,7 @@ pub struct ConnectionEntry {
     pub packets_out: u64,
     pub bytes_in: u64,
     pub bytes_out: u64,
+    pub draining: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

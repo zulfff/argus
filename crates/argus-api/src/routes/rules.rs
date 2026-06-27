@@ -195,6 +195,9 @@ pub async fn create_rule(
         enabled: req.enabled,
         created_at: now,
         updated_at: now,
+        rate_limit_pps: None,
+        hit_count: 0,
+        last_hit: None,
     };
 
     let created = state
@@ -282,6 +285,9 @@ pub async fn update_rule(
         enabled: req.enabled,
         created_at: existing.created_at,
         updated_at: chrono::Utc::now(),
+        rate_limit_pps: existing.rate_limit_pps,
+        hit_count: existing.hit_count,
+        last_hit: existing.last_hit,
     };
 
     let rule = state

@@ -114,6 +114,7 @@ impl PostgresConnectionStore {
                 packets_out: row.packets_out as u64,
                 bytes_in: row.bytes_in as u64,
                 bytes_out: row.bytes_out as u64,
+                draining: false,
             }
         })
         .collect()

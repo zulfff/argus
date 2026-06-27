@@ -64,6 +64,10 @@ impl EbpfController {
         }
     }
 
+    pub fn is_loaded(&self) -> bool {
+        self.loaded
+    }
+
     pub fn init(&mut self, obj_path: &str, wan_iface: &str) -> Result<()> {
         if !Path::new(obj_path).exists() {
             warn!(

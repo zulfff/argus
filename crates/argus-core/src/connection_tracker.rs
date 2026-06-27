@@ -71,6 +71,7 @@ impl ConnectionTracker {
                     packets_out: 0,
                     bytes_in: 0,
                     bytes_out: 0,
+                    draining: false,
                 },
             );
             drop(conns);
@@ -127,6 +128,33 @@ impl ConnectionTracker {
 
     pub fn gc_interval(&self) -> u64 {
         self.gc_interval_secs
+    }
+
+    pub fn mark_draining(&self, ip: IpAddr) {
+        if let Ok(mut conns) = self.connections.lock() {
+            for (key, entry) in conns.iter_mut() {
+                if key.src_ip == ip || key.dst_ip == ip {
+                    entry.draining = true;
+                }
+            }
+        }
+    }
+
+    pub fn count_for_ip(&self, ip: IpAddr) -> usize {
+        self.connections
+            .lock()
+            .map(|c| {
+                c.iter()
+                    .filter(|(k, _)| k.src_ip == ip || k.dst_ip == ip)
+                    .count()
+            })
+            .unwrap_or(0)
+    }
+
+    pub fn close_all_for_ip(&self, ip: IpAddr) {
+        if let Ok(mut conns) = self.connections.lock() {
+            conns.retain(|k, _| k.src_ip != ip && k.dst_ip != ip);
+        }
     }
 }
 
