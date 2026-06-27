@@ -133,6 +133,9 @@ impl TryFrom<RuleRow> for CidrRule {
             enabled: row.enabled,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            rate_limit_pps: None,
+            hit_count: 0,
+            last_hit: None,
         })
     }
 }
