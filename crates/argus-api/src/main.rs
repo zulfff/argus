@@ -500,7 +500,7 @@ fn generate_secret() -> Vec<u8> {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt().with_target(false).init();
-    info!("ARGUS v0.1.1 starting...");
+    info!("ARGUS v0.1.3 starting...");
 
     if let Err(e) = try_main().await {
         error!("Fatal startup error: {:#}", e);
