@@ -1,4 +1,4 @@
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, Ipv6Addr};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -9,6 +9,24 @@ use tracing::{info, warn};
 
 use argus_common::error::{ArgusError, Result};
 use argus_common::types::{Action, CidrRule};
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ReputationValue {
+    pub score: i32,
+    pub category: u32,
+}
+
+unsafe impl aya::Pod for ReputationValue {}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ThreatCounter {
+    pub drops: u64,
+    pub last_seen: u64,
+}
+
+unsafe impl aya::Pod for ThreatCounter {}
 
 pub struct EbpfController {
     bpf: Option<Mutex<Bpf>>,
@@ -191,6 +209,75 @@ impl EbpfController {
             self.sync_cidr(bpf, rule, cidr, false, add)?;
         }
         Ok(())
+    }
+
+    pub fn sync_reputation_v4(&self, ips: &[(Ipv4Addr, u32, ReputationValue)]) -> Result<()> {
+        if !self.loaded {
+            return Ok(());
+        }
+        self.with_bpf(|bpf| {
+            let map_ref = bpf
+                .map_mut("IP_REPUTATION_V4")
+                .ok_or_else(|| ArgusError::Internal("IP_REPUTATION_V4 map not found".into()))?;
+            let mut trie: LpmTrie<_, u32, ReputationValue> = LpmTrie::try_from(map_ref)
+                .map_err(|e| ArgusError::External(format!("LpmTrie access: {}", e)))?;
+
+            for (ip, prefix_len, val) in ips {
+                let key = Key::new(*prefix_len, u32::from(*ip));
+                trie.insert(&key, *val, 0)
+                    .map_err(|e| ArgusError::External(format!("reputation v4 insert: {}", e)))?;
+            }
+            Ok(())
+        })
+    }
+
+    pub fn sync_reputation_v6(&self, ips: &[(Ipv6Addr, u32, ReputationValue)]) -> Result<()> {
+        if !self.loaded {
+            return Ok(());
+        }
+        self.with_bpf(|bpf| {
+            let map_ref = bpf
+                .map_mut("IP_REPUTATION_V6")
+                .ok_or_else(|| ArgusError::Internal("IP_REPUTATION_V6 map not found".into()))?;
+            let mut trie: LpmTrie<_, u128, ReputationValue> = LpmTrie::try_from(map_ref)
+                .map_err(|e| ArgusError::External(format!("LpmTrie access: {}", e)))?;
+
+            for (ip, prefix_len, val) in ips {
+                let key = Key::new(*prefix_len, u128::from(*ip));
+                trie.insert(&key, *val, 0)
+                    .map_err(|e| ArgusError::External(format!("reputation v6 insert: {}", e)))?;
+            }
+            Ok(())
+        })
+    }
+
+    pub fn get_threat_stats(&self) -> Result<std::collections::HashMap<u32, ThreatCounter>> {
+        if !self.loaded {
+            return Ok(std::collections::HashMap::new());
+        }
+        self.with_bpf(|bpf| {
+            let map_ref = bpf
+                .map("THREAT_STATS")
+                .ok_or_else(|| ArgusError::Internal("THREAT_STATS map not found".into()))?;
+            let hashmap: aya::maps::PerCpuHashMap<_, u32, ThreatCounter> =
+                aya::maps::PerCpuHashMap::try_from(map_ref)
+                    .map_err(|e| ArgusError::External(format!("PerCpuHashMap access: {}", e)))?;
+
+            let mut stats = std::collections::HashMap::new();
+            for (k, v) in hashmap.iter().flatten() {
+                // Aggregate PerCpu values
+                let aggregated_drops = v.iter().map(|c| c.drops).sum();
+                let max_last_seen = v.iter().map(|c| c.last_seen).max().unwrap_or(0);
+                stats.insert(
+                    k,
+                    ThreatCounter {
+                        drops: aggregated_drops,
+                        last_seen: max_last_seen,
+                    },
+                );
+            }
+            Ok(stats)
+        })
     }
 
     fn sync_cidr(

@@ -1,5 +1,29 @@
 use aya_ebpf::macros::map;
-use aya_ebpf::maps::{HashMap, LpmTrie, PerCpuArray, PerfEventArray};
+use aya_ebpf::maps::{HashMap, LpmTrie, PerCpuArray, PerCpuHashMap, PerfEventArray};
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ReputationValue {
+    pub score: i32,
+    pub category: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ThreatCounter {
+    pub drops: u64,
+    pub last_seen: u64,
+}
+
+#[map]
+pub static IP_REPUTATION_V4: LpmTrie<u32, ReputationValue> = LpmTrie::with_max_entries(262144, 0);
+
+#[map]
+pub static IP_REPUTATION_V6: LpmTrie<u128, ReputationValue> = LpmTrie::with_max_entries(131072, 0);
+
+#[map]
+pub static THREAT_STATS: PerCpuHashMap<u32, ThreatCounter> =
+    PerCpuHashMap::with_max_entries(100000, 0);
 
 #[map]
 pub static SRC_BLOCKLIST: LpmTrie<u32, u32> = LpmTrie::with_max_entries(65536, 0);

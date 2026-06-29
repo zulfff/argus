@@ -1,6 +1,6 @@
 use argus_common::types::ScanAlert;
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::sync::Mutex;
 use tracing::instrument;
@@ -12,6 +12,7 @@ const AUTO_BLOCK_DURATION_SECS: i64 = 300;
 pub struct ScanDetector {
     attempts: Mutex<HashMap<IpAddr, ScanRecord>>,
     blocked: Mutex<HashMap<IpAddr, DateTime<Utc>>>,
+    manual_blocks: Mutex<HashSet<IpAddr>>,
 }
 
 struct ScanRecord {
@@ -22,10 +23,13 @@ struct ScanRecord {
 }
 
 impl ScanDetector {
+    const MAX_PORTS_SCANNED: usize = 65536;
+
     pub fn new() -> Self {
         Self {
             attempts: Mutex::new(HashMap::new()),
             blocked: Mutex::new(HashMap::new()),
+            manual_blocks: Mutex::new(HashSet::new()),
         }
     }
 
@@ -57,6 +61,9 @@ impl ScanDetector {
 
         if !record.ports.contains(&dst_port) {
             record.ports.push(dst_port);
+            if record.ports.len() > Self::MAX_PORTS_SCANNED {
+                record.ports.truncate(Self::MAX_PORTS_SCANNED);
+            }
         }
         record.last_seen = now;
 
@@ -87,16 +94,23 @@ impl ScanDetector {
         if let Ok(mut blocked) = self.blocked.lock() {
             blocked.remove(&ip);
         }
+        if let Ok(mut manual) = self.manual_blocks.lock() {
+            manual.remove(&ip);
+        }
     }
 
     pub fn manual_block(&self, ip: IpAddr) {
-        let now = Utc::now();
-        if let Ok(mut blocked) = self.blocked.lock() {
-            blocked.insert(ip, now);
+        if let Ok(mut manual) = self.manual_blocks.lock() {
+            manual.insert(ip);
         }
     }
 
     fn is_blocked(&self, ip: IpAddr, now: DateTime<Utc>) -> bool {
+        if let Ok(manual) = self.manual_blocks.lock() {
+            if manual.contains(&ip) {
+                return true;
+            }
+        }
         if let Ok(mut blocked) = self.blocked.lock() {
             if let Some(&since) = blocked.get(&ip) {
                 if (now - since).num_seconds() > AUTO_BLOCK_DURATION_SECS {
@@ -120,7 +134,9 @@ impl ScanDetector {
     }
 
     pub fn blocked_count(&self) -> usize {
-        self.blocked.lock().map(|b| b.len()).unwrap_or(0)
+        let auto = self.blocked.lock().map(|b| b.len()).unwrap_or(0);
+        let manual = self.manual_blocks.lock().map(|m| m.len()).unwrap_or(0);
+        auto + manual
     }
 }
 

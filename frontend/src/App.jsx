@@ -31,10 +31,10 @@ const ARGUS_ICON = (
 );
 
 function btnClass(active) {
-  return `flex items-center gap-3 w-full px-4 py-2.5 text-sm transition-all cursor-pointer text-left rounded-lg mx-2 ${
+  return `flex items-center gap-3 w-full px-4 py-2.5 text-sm transition-all duration-300 cursor-pointer text-left rounded-lg mx-2 backdrop-blur-md ${
     active 
-      ? 'bg-[var(--color-primary)] text-white font-medium shadow-sm' 
-      : 'text-[var(--color-text-sec)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)]'
+      ? 'bg-white/10 text-white font-medium border border-white/25 shadow-[0_0_15px_rgba(59,130,246,0.3)]' 
+      : 'text-[var(--color-text-sec)] border border-transparent hover:bg-white/5 hover:text-[var(--color-text)] hover:border-white/5'
   }`;
 }
 
@@ -44,10 +44,10 @@ function Sidebar({ alertCount }) {
   const auth = useContext(AuthContext);
 
   return (
-    <div className="w-[240px] bg-[var(--color-bg-panel)] border-r border-[var(--color-bg-border)] flex flex-col shrink-0">
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-[var(--color-bg-border)]">
+    <div className="w-[240px] bg-white/5 border-r border-white/10 flex flex-col shrink-0 backdrop-blur-lg">
+      <div className="flex items-center gap-3 px-6 py-5 border-b border-white/10">
         <div className="text-[var(--color-primary)]">{ARGUS_ICON}</div>
-        <span className="text-lg font-semibold text-[var(--color-text)]">Argus</span>
+        <span className="text-lg font-semibold text-[var(--color-text)] tracking-wider">Argus</span>
       </div>
       <nav className="flex-1 py-4 space-y-1">
         {NAV_ITEMS.map((item) => (
@@ -59,14 +59,14 @@ function Sidebar({ alertCount }) {
             <span className="text-base w-5 text-center">{item.icon}</span>
             <span className="flex-1">{item.label}</span>
             {item.path === '/alerts' && alertCount > 0 && (
-              <span className="inline-flex items-center justify-center min-w-[20px] h-5 rounded-full px-1.5 text-[11px] font-semibold bg-[var(--color-danger)] text-white">{alertCount}</span>
+              <span className="inline-flex items-center justify-center min-w-[20px] h-5 rounded-full px-1.5 text-[11px] font-semibold bg-[var(--color-danger)] text-white shadow-[0_0_8px_rgba(244,63,94,0.4)]">{alertCount}</span>
             )}
           </button>
         ))}
       </nav>
-      <div className="px-4 py-4 border-t border-[var(--color-bg-border)] space-y-3">
+      <div className="px-4 py-4 border-t border-white/10 space-y-3">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-[var(--color-primary-light)] flex items-center justify-center text-[var(--color-primary)] text-sm font-semibold">
+          <div className="w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[var(--color-primary)] text-sm font-semibold backdrop-blur-md">
             {auth.user?.username?.[0]?.toUpperCase() || '?'}
           </div>
           <div className="flex-1 min-w-0">
@@ -75,7 +75,7 @@ function Sidebar({ alertCount }) {
           </div>
         </div>
         <button 
-          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg bg-transparent text-[var(--color-text-sec)] border border-[var(--color-bg-border)] hover:bg-[var(--color-bg-hover)] hover:border-[var(--color-text-muted)] transition-all font-medium" 
+          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg bg-white/5 text-[var(--color-text-sec)] border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all font-medium backdrop-blur-md" 
           onClick={auth.logout}
         >
           Logout
@@ -117,8 +117,8 @@ export default function App() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const stored = localStorage.getItem('argus_user');
-    const tokens = localStorage.getItem('argus_tokens');
+    const stored = sessionStorage.getItem('argus_user');
+    const tokens = sessionStorage.getItem('argus_tokens');
     if (stored && tokens) {
       try {
         const { access, refresh } = JSON.parse(tokens);
@@ -134,16 +134,17 @@ export default function App() {
     const { access_token, refresh_token, role } = res;
     api.setTokens(access_token, refresh_token);
     const u = { username, role };
-    localStorage.setItem('argus_user', JSON.stringify(u));
-    localStorage.setItem('argus_tokens', JSON.stringify({ access: access_token, refresh: refresh_token }));
+    sessionStorage.setItem('argus_user', JSON.stringify(u));
+    sessionStorage.setItem('argus_tokens', JSON.stringify({ access: access_token, refresh: refresh_token }));
     setUser(u);
     navigate('/dashboard');
   }, [navigate]);
 
   const logout = useCallback(() => {
     api.clearTokens();
-    localStorage.removeItem('argus_user');
-    localStorage.removeItem('argus_tokens');
+    api.disconnectWebSocket();
+    sessionStorage.removeItem('argus_user');
+    sessionStorage.removeItem('argus_tokens');
     setUser(null);
     navigate('/login');
   }, [navigate]);

@@ -256,11 +256,21 @@ impl AlertManager {
             match channel.channel_type {
                 ChannelType::Webhook => {
                     if let Some(url) = channel.config.get("url").and_then(|v| v.as_str()) {
+                        if Self::validate_channel_url(url).is_err() {
+                            tracing::warn!(
+                                "Skipping webhook notification: URL failed re-validation"
+                            );
+                            continue;
+                        }
                         let _ = client.post(url).json(&payload).send().await;
                     }
                 }
                 ChannelType::Slack => {
                     if let Some(url) = channel.config.get("webhook_url").and_then(|v| v.as_str()) {
+                        if Self::validate_channel_url(url).is_err() {
+                            tracing::warn!("Skipping slack notification: URL failed re-validation");
+                            continue;
+                        }
                         let slack_payload = serde_json::json!({
                             "text": format!("*ARGUS Alert*: {}\n> {}", event.message, event.condition),
                         });
@@ -269,6 +279,12 @@ impl AlertManager {
                 }
                 ChannelType::Discord => {
                     if let Some(url) = channel.config.get("webhook_url").and_then(|v| v.as_str()) {
+                        if Self::validate_channel_url(url).is_err() {
+                            tracing::warn!(
+                                "Skipping discord notification: URL failed re-validation"
+                            );
+                            continue;
+                        }
                         let discord_payload = serde_json::json!({
                             "content": format!("**ARGUS Alert**\n{}: {}", event.severity.to_uppercase(), event.message),
                         });
@@ -287,6 +303,78 @@ impl AlertManager {
                 }
             }
         }
+    }
+
+    fn validate_channel_url(url: &str) -> Result<(), ()> {
+        let without_scheme = match url.strip_prefix("https://") {
+            Some(s) => s,
+            None => match url.strip_prefix("http://") {
+                Some(s) => s,
+                None => return Err(()),
+            },
+        };
+        let mut host = match without_scheme.split('/').next() {
+            Some(h) => h,
+            None => return Err(()),
+        };
+        if host.starts_with('[') {
+            if let Some(end) = host.find(']') {
+                host = &host[1..end];
+            }
+        } else {
+            host = host.split(':').next().unwrap_or(host);
+        }
+        if host.is_empty() {
+            return Err(());
+        }
+        if let Some(at_pos) = host.rfind('@') {
+            host = &host[at_pos + 1..];
+        }
+        if host.is_empty() {
+            return Err(());
+        }
+        if host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" {
+            return Err(());
+        }
+        if host == "169.254.169.254" || host.ends_with(".compute.internal") {
+            return Err(());
+        }
+        let lower = host.to_lowercase();
+        if lower.starts_with("[::ffff:") && lower.ends_with(']') {
+            let inner = &lower[8..lower.len() - 1];
+            if inner == "127.0.0.1"
+                || inner == "169.254.169.254"
+                || inner == "10."
+                || inner.starts_with("172.")
+                || inner.starts_with("192.168.")
+            {
+                return Err(());
+            }
+        }
+        if let Ok(addr) = host.parse::<std::net::Ipv4Addr>() {
+            let octets = addr.octets();
+            if octets[0] == 10
+                || (octets[0] == 172 && (16..=31).contains(&octets[1]))
+                || (octets[0] == 192 && octets[1] == 168)
+                || octets[0] == 127
+            {
+                return Err(());
+            }
+        }
+        if let Ok(addr) = host.parse::<std::net::Ipv6Addr>() {
+            if addr.is_loopback() || addr.is_unspecified() {
+                return Err(());
+            }
+            if let Some(ipv4) = addr.to_ipv4_mapped() {
+                if ipv4.is_loopback()
+                    || ipv4.is_private()
+                    || ipv4 == std::net::Ipv4Addr::new(169, 254, 169, 254)
+                {
+                    return Err(());
+                }
+            }
+        }
+        Ok(())
     }
 }
 

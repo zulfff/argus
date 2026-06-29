@@ -139,14 +139,15 @@ impl WasmPluginEngine {
 
     #[instrument(skip(self, metadata))]
     pub fn run_hook(&self, hook_point: HookPoint, metadata: &FlowMetadata) -> Vec<PluginOutput> {
-        let hooks = match self.hooks.lock() {
-            Ok(h) => h,
-            Err(_) => return Vec::new(),
-        };
-
-        let plugin_ids = match hooks.get(&hook_point) {
-            Some(ids) => ids.clone(),
-            None => return Vec::new(),
+        let plugin_ids = {
+            let hooks = match self.hooks.lock() {
+                Ok(h) => h,
+                Err(_) => return Vec::new(),
+            };
+            match hooks.get(&hook_point) {
+                Some(ids) => ids.clone(),
+                None => return Vec::new(),
+            }
         };
 
         let plugins = match self.plugins.lock() {
@@ -206,7 +207,7 @@ impl WasmPluginEngine {
                 "env",
                 "log",
                 |mut caller: wasmtime::Caller<'_, ()>, msg_ptr: i32, msg_len: i32| {
-                    if msg_len <= 0 || msg_ptr < 0 {
+                    if msg_len <= 0 || msg_ptr < 0 || msg_len > 4096 {
                         return;
                     }
                     let Some(mem) = caller.get_export("memory").and_then(|e| e.into_memory())

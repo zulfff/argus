@@ -67,6 +67,7 @@ pub async fn create_backup(
             serde_json::json!({
                 "id": u.id,
                 "username": u.username,
+                "password_hash": u.password_hash,
                 "role": u.role,
                 "enabled": u.enabled,
             })
@@ -364,28 +365,31 @@ async fn restore_from_snapshot(
                 _ => crate::auth::Role::Viewer,
             };
             let password_hash = user_val.get("password_hash").and_then(|v| v.as_str());
-            if let Some(hash) = password_hash {
+            let (hash, enabled) = if let Some(hash) = password_hash {
                 if !hash.is_empty() {
-                    parsed_users.push((username.to_string(), hash.to_string(), role));
+                    (hash.to_string(), true)
                 } else {
-                    return Err(format!(
-                        "User '{}' in backup has empty password_hash — cannot restore. Regenerate backup or manually set passwords.",
+                    tracing::warn!(
+                        "User '{}' in backup has empty password_hash — restoring as disabled. Admin must reset password.",
                         username
-                    ));
+                    );
+                    (crate::auth::hash_password_for_restore(), false)
                 }
             } else {
-                return Err(format!(
-                    "User '{}' in backup is missing password_hash — this backup was created after password hashes were excluded for security. Cannot restore users from this backup. Use the last backup that includes password hashes, or manually recreate users.",
+                tracing::warn!(
+                    "User '{}' in backup is missing password_hash — restoring as disabled. Admin must reset password.",
                     username
-                ));
-            }
+                );
+                (crate::auth::hash_password_for_restore(), false)
+            };
+            parsed_users.push((username.to_string(), hash, role, enabled));
         }
         state.auth_config.user_store.clear_users().await;
-        for (username, password_hash, role) in &parsed_users {
+        for (username, password_hash, role, enabled) in &parsed_users {
             state
                 .auth_config
                 .user_store
-                .restore_user(username, password_hash, role.clone())
+                .restore_user(username, password_hash, role.clone(), *enabled)
                 .await
                 .map_err(|e| format!("Failed to restore user '{}': {}", username, e))?;
         }

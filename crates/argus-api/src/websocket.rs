@@ -93,6 +93,28 @@ pub async fn ws_handler(
     headers: HeaderMap,
     Query(query): Query<WsQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    // Validate WebSocket origin to prevent Cross-Site WebSocket Hijacking
+    if let Some(origin) = headers.get(header::ORIGIN) {
+        if let Ok(origin_str) = origin.to_str() {
+            if let Ok(allowed) = std::env::var("ARGUS_ALLOWED_ORIGINS") {
+                let allowed_origins: Vec<&str> = allowed
+                    .split(',')
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if !allowed_origins.is_empty() && !allowed_origins.contains(&origin_str) {
+                    return Err((StatusCode::FORBIDDEN, "WebSocket origin not allowed".into()));
+                }
+            } else if std::env::var("ARGUS_PRODUCTION").is_ok() {
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    "WebSocket origin must be validated in production. Set ARGUS_ALLOWED_ORIGINS."
+                        .into(),
+                ));
+            }
+        }
+    }
+
     let token = if let Some(auth_header) = headers.get(header::AUTHORIZATION) {
         let auth_str = auth_header.to_str().map_err(|_| {
             (
@@ -155,6 +177,8 @@ pub async fn ws_handler(
 }
 
 async fn handle_ws(mut socket: WebSocket, mut rx: broadcast::Receiver<LiveEvent>) {
+    let mut lag_count = 0u32;
+    let max_lag_before_disconnect: u32 = 3;
     loop {
         tokio::select! {
             event = rx.recv() => {
@@ -172,7 +196,12 @@ async fn handle_ws(mut socket: WebSocket, mut rx: broadcast::Receiver<LiveEvent>
                         break;
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
-                        warn!("WebSocket client lagged by {} messages", n);
+                        lag_count += 1;
+                        warn!("WebSocket client lagged by {} messages (strike {}/{})", n, lag_count, max_lag_before_disconnect);
+                        if lag_count >= max_lag_before_disconnect {
+                            warn!("WebSocket client disconnected after {} lag events", lag_count);
+                            break;
+                        }
                     }
                 }
             }

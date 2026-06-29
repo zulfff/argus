@@ -50,6 +50,46 @@ export default function Rules() {
   const toggleAll = () => setSelected((p) => p.size === filtered.length ? new Set() : new Set(filtered.map((r) => r.id)));
   const toggleSelect = (id) => setSelected((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  const handleDragStart = (e, index) => {
+    e.dataTransfer.setData('text/plain', index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = async (e, targetIndex) => {
+    e.preventDefault();
+    const sourceIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+    if (sourceIndex === targetIndex) return;
+
+    const reorderedRules = [...rules];
+    const [removed] = reorderedRules.splice(sourceIndex, 1);
+    reorderedRules.splice(targetIndex, 0, removed);
+
+    // Update rules state locally to reflect the order instantly
+    setRules(reorderedRules);
+
+    // Call API to persist re-ordered rule priorities sequentially
+    try {
+      await Promise.all(
+        reorderedRules.map((rule, idx) => {
+          const newPriority = (idx + 1) * 10;
+          if (rule.priority !== newPriority) {
+            return api.rules.update(rule.id, { ...rule, priority: newPriority });
+          }
+          return Promise.resolve();
+        })
+      );
+      // Fetch fresh rules to align with backend
+      const updated = await api.rules.list();
+      setRules(updated);
+    } catch (err) {
+      console.error('Failed to save priority re-ordering', err);
+    }
+  };
+
   const handleSimulate = async (e) => {
     e.preventDefault();
     const fd = Object.fromEntries(new FormData(e.target));
@@ -137,10 +177,14 @@ export default function Rules() {
               {filtered.length === 0 ? (
                 <tr><td colSpan={11}><EmptyState msg="No rules found." /></td></tr>
               ) : (
-                filtered.map((r) => (
+                filtered.map((r, idx) => (
                   <tr 
                     key={r.id} 
-                    className={tableRowCls} 
+                    className={tableRowCls + ' cursor-move'} 
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, idx)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, idx)}
                     style={{ 
                       background: simResult?.matched && simResult.rule_id === r.id 
                         ? 'var(--color-success-light)' 
@@ -148,7 +192,9 @@ export default function Rules() {
                     }}
                   >
                     <td className={tableCellCls}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="cursor-pointer" style={{ accentColor: 'var(--color-primary)' }} /></td>
-                    <td className={tableCellCls + ' text-mono text-[var(--color-text-muted)]'}>{r.priority}</td>
+                    <td className={tableCellCls + ' text-mono text-[var(--color-text-muted)] flex items-center gap-1'}>
+                      <span className="opacity-50 select-none">☰</span> {r.priority}
+                    </td>
                     <td className={tableCellCls + ' font-medium'}>{r.name}</td>
                     <td className={tableCellCls}><Badge variant={r.action?.split(':')[0] || r.action}>{r.action}</Badge></td>
                     <td className={tableCellCls}><Badge variant={r.direction}>{r.direction}</Badge></td>

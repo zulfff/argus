@@ -193,8 +193,9 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Unblock { ip } => {
+            let encoded_ip = ip.replace('/', "%2F");
             let resp = client
-                .delete(format!("{}/api/v1/block/{}", cli.api_url, ip))
+                .delete(format!("{}/api/v1/block/{}", cli.api_url, encoded_ip))
                 .send()
                 .await?;
 

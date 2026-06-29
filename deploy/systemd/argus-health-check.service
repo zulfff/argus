@@ -4,6 +4,7 @@ After=network.target argus-api.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/argus-cli --api-url http://localhost:8443 stats
+ExecStart=/usr/local/bin/argus-cli stats
+# ponytail: CLI defaults to http://127.0.0.1:8443. If using TLS, set: --api-url https://localhost:8443
 User=argus
 StandardOutput=journal

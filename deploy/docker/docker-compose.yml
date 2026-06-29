@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: argus
       POSTGRES_USER: argus
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-argus-auto-secret}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?err: DB_PASSWORD must be set}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
@@ -34,11 +34,12 @@ services:
     ports:
       - "8443:8443"
     environment:
-      DATABASE_URL: postgres://argus:${DB_PASSWORD:-argus-auto-secret}@postgres:5432/argus
+      DATABASE_URL: postgres://argus:${DB_PASSWORD}@postgres:5432/argus
       REDIS_URL: redis://redis:6379
-      ARGUS_JWT_SECRET: ${JWT_SECRET}
+      ARGUS_JWT_SECRET: ${JWT_SECRET:?err: JWT_SECRET must be set}
       ARGUS_ADMIN_USER: ${ARGUS_ADMIN_USER:-admin}
-      ARGUS_ADMIN_PASS: ${ARGUS_ADMIN_PASS}
+      ARGUS_ADMIN_PASS: ${ARGUS_ADMIN_PASS:?err: ARGUS_ADMIN_PASS must be set}
+      ARGUS_PRODUCTION: "1"
       RUST_LOG: ${RUST_LOG:-argus=info}
     depends_on:
       postgres:
@@ -48,35 +49,43 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.4
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?err: GRAFANA_PASSWORD must be set}
       GF_INSTALL_PLUGINS: grafana-piechart-panel
     volumes:
+      - grafana_data:/var/lib/grafana
       - ../grafana/argus-dashboard.json:/etc/grafana/provisioning/dashboards/argus.json:ro
       - ./grafana-datasource.yml:/etc/grafana/provisioning/datasources/prometheus.yml:ro
+      - ./grafana-dashboard-provider.yml:/etc/grafana/provisioning/dashboards/provider.yml:ro
     depends_on:
       - prometheus
     restart: unless-stopped
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.52
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=30d'
     restart: unless-stopped
 
   loki:
-    image: grafana/loki:latest
+    image: grafana/loki:3.1
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - loki_data:/loki
     restart: unless-stopped
 
 volumes:
   pgdata:
+  prometheus_data:
+  grafana_data:
+  loki_data:

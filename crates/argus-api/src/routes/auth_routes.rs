@@ -69,6 +69,33 @@ pub async fn refresh(
     Json(req): Json<RefreshRequest>,
 ) -> Result<Json<TokenResponse>, (StatusCode, Json<serde_json::Value>)> {
     let jwt = &state.auth_config.jwt_auth;
+    let interim_claims = jwt.validate_token(&req.refresh_token).map_err(|_e| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({
+                "error": "Token refresh failed",
+                "code": 401
+            })),
+        )
+    })?;
+    if let Some(user) = state
+        .auth_config
+        .user_store
+        .find_by_username(&interim_claims.username)
+        .await
+    {
+        if !user.enabled {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({"error": "Account disabled", "code": 401})),
+            ));
+        }
+    } else {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "User not found", "code": 401})),
+        ));
+    }
     let tokens = jwt.refresh_access_token(&req.refresh_token).map_err(|_e| {
         (
             StatusCode::UNAUTHORIZED,
@@ -136,6 +163,31 @@ pub async fn create_user(
         ));
     }
 
+    if req.username.is_empty() || req.username.len() > 128 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Username must be 1-128 characters", "code": 400})),
+        ));
+    }
+    if state
+        .auth_config
+        .user_store
+        .find_by_username(&req.username)
+        .await
+        .is_some()
+    {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({"error": "Username already exists", "code": 409})),
+        ));
+    }
+    if req.password.len() < 8 || req.password.len() > 128 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Password must be 8-128 characters", "code": 400})),
+        ));
+    }
+
     let role = match req.role.as_deref() {
         Some("operator") => Role::Operator,
         Some("viewer") => Role::Viewer,
@@ -148,9 +200,10 @@ pub async fn create_user(
         .add_user(&req.username, &req.password, role)
         .await
         .map_err(|e| {
+            tracing::error!("Failed to create user: {}", e);
             (
                 StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({"error": e, "code": 400})),
+                Json(serde_json::json!({"error": "Failed to create user", "code": 400})),
             )
         })?;
 
@@ -237,15 +290,23 @@ pub async fn change_password(
             })?;
     }
 
+    if req.password.len() < 8 || req.password.len() > 128 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Password must be 8-128 characters", "code": 400})),
+        ));
+    }
+
     state
         .auth_config
         .user_store
         .change_password(&username, &req.password)
         .await
         .map_err(|e| {
+            tracing::error!("Failed to change password: {}", e);
             (
                 StatusCode::NOT_FOUND,
-                Json(serde_json::json!({"error": e, "code": 404})),
+                Json(serde_json::json!({"error": "Failed to change password", "code": 404})),
             )
         })?;
 

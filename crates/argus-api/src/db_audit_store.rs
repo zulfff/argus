@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
-use tracing::info;
+use tracing::{error, info};
 use uuid::Uuid;
 
 use argus_common::audit::compute_audit_hash;
@@ -120,7 +120,7 @@ impl PostgresAuditStore {
             previous_hash,
         };
 
-        let _ = sqlx::query(
+        if let Err(e) = sqlx::query(
             "INSERT INTO audit_log (id, timestamp, actor, action, resource, details, ip_address, success, hash, previous_hash)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
         )
@@ -135,7 +135,10 @@ impl PostgresAuditStore {
         .bind(&entry.hash)
         .bind(&entry.previous_hash)
         .execute(&self.pool)
-        .await;
+        .await
+        {
+            error!("PostgresAuditStore: failed to insert audit entry {}: {}", entry.id, e);
+        }
 
         entry
     }
@@ -243,9 +246,7 @@ impl PostgresAuditStore {
 
         for (i, entry) in rows.iter().enumerate() {
             if first {
-                let mut gen_hasher = Sha256::new();
-                gen_hasher.update(b"genesis");
-                expected_previous = hex::encode(gen_hasher.finalize());
+                expected_previous = entry.previous_hash.clone();
                 first = false;
             }
 

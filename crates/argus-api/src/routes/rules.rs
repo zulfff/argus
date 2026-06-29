@@ -180,6 +180,10 @@ pub async fn create_rule(
     })?;
 
     let now = chrono::Utc::now();
+    let rate_limit_pps = match &action {
+        Action::RateLimit { packets_per_second } => Some(*packets_per_second),
+        _ => None,
+    };
     let rule = CidrRule {
         id: Uuid::new_v4(),
         name: req.name,
@@ -195,7 +199,7 @@ pub async fn create_rule(
         enabled: req.enabled,
         created_at: now,
         updated_at: now,
-        rate_limit_pps: None,
+        rate_limit_pps,
         hit_count: 0,
         last_hit: None,
     };

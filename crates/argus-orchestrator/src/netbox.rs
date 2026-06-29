@@ -282,7 +282,26 @@ impl NetboxClient {
             )));
         }
 
-        Ok(vec![])
+        self.record_circuit_success();
+
+        // Full implementation: Fetch active devices and parse firewall rules from their custom fields
+        let devices = self.get_devices(Some("active")).await?;
+        let mut rules = Vec::new();
+        for device in devices {
+            if let Some(cf_rules) = device
+                .custom_fields
+                .get("firewall_rules")
+                .and_then(|r| r.as_array())
+            {
+                for r_val in cf_rules {
+                    if let Ok(rule) = serde_json::from_value::<FirewallRule>(r_val.clone()) {
+                        rules.push(rule);
+                    }
+                }
+            }
+        }
+
+        Ok(rules)
     }
 
     #[instrument(skip(self))]

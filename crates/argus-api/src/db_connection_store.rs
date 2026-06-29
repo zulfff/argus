@@ -51,12 +51,34 @@ impl PostgresConnectionStore {
         entry: &ConnectionEntry,
     ) -> std::result::Result<(), sqlx::Error> {
         let state_str = connection_state_to_str(entry.state);
+        // Generate a deterministic or persistent UUID for ON CONFLICT (id) to work properly
+        let mut uuid_bytes = [0u8; 16];
+        let src_bytes = match entry.src_ip {
+            IpAddr::V4(ip) => ip.octets().to_vec(),
+            IpAddr::V6(ip) => ip.octets().to_vec(),
+        };
+        let dst_bytes = match entry.dst_ip {
+            IpAddr::V4(ip) => ip.octets().to_vec(),
+            IpAddr::V6(ip) => ip.octets().to_vec(),
+        };
+
+        let mut hasher = sha2::Sha256::default();
+        use sha2::Digest;
+        hasher.update(&src_bytes);
+        hasher.update(&dst_bytes);
+        hasher.update(entry.src_port.to_be_bytes());
+        hasher.update(entry.dst_port.to_be_bytes());
+        hasher.update([entry.protocol]);
+        let hash = hasher.finalize();
+        uuid_bytes.copy_from_slice(&hash[..16]);
+        let entry_id = uuid::Uuid::from_bytes(uuid_bytes);
+
         sqlx::query(
             "INSERT INTO connections (id, src_ip, dst_ip, src_port, dst_port, protocol, state, created_at, last_seen, packets_in, packets_out, bytes_in, bytes_out)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
              ON CONFLICT (id) DO UPDATE SET last_seen=$9, packets_in=$10, packets_out=$11, bytes_in=$12, bytes_out=$13, state=$7",
         )
-        .bind(uuid::Uuid::new_v4())
+        .bind(entry_id)
         .bind(entry.src_ip.to_string())
         .bind(entry.dst_ip.to_string())
         .bind(entry.src_port as i16)
@@ -93,31 +115,40 @@ impl PostgresConnectionStore {
             bytes_out: i64,
         }
 
-        sqlx::query_as::<_, ConnRow>(
+        match sqlx::query_as::<_, ConnRow>(
             "SELECT src_ip, dst_ip, src_port, dst_port, protocol, state, created_at, last_seen, packets_in, packets_out, bytes_in, bytes_out FROM connections WHERE state IN ('new', 'established', 'closing') ORDER BY last_seen DESC",
         )
         .fetch_all(&self.pool)
         .await
-        .unwrap_or_default()
-        .into_iter()
-        .map(|row| {
-            ConnectionEntry {
-                src_ip: row.src_ip.parse().unwrap_or(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED)),
-                dst_ip: row.dst_ip.parse().unwrap_or(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED)),
-                src_port: row.src_port as u16,
-                dst_port: row.dst_port as u16,
-                protocol: row.protocol as u8,
-                state: str_to_connection_state(&row.state),
-                created_at: row.created_at,
-                last_seen: row.last_seen,
-                packets_in: row.packets_in as u64,
-                packets_out: row.packets_out as u64,
-                bytes_in: row.bytes_in as u64,
-                bytes_out: row.bytes_out as u64,
-                draining: false,
+        {
+            Ok(rows) => rows
+                .into_iter()
+                .filter_map(|row| {
+                    let src_ip = row.src_ip.parse().ok()?;
+                    let dst_ip = row.dst_ip.parse().ok()?;
+                    let state = str_to_connection_state(&row.state);
+                    Some(ConnectionEntry {
+                        src_ip,
+                        dst_ip,
+                        src_port: row.src_port as u16,
+                        dst_port: row.dst_port as u16,
+                        protocol: row.protocol as u8,
+                        state,
+                        created_at: row.created_at,
+                        last_seen: row.last_seen,
+                        packets_in: row.packets_in as u64,
+                        packets_out: row.packets_out as u64,
+                        bytes_in: row.bytes_in as u64,
+                        bytes_out: row.bytes_out as u64,
+                        draining: false,
+                    })
+                })
+                .collect(),
+            Err(e) => {
+                tracing::error!("PostgresConnectionStore: list_active failed: {}", e);
+                Vec::new()
             }
-        })
-        .collect()
+        }
     }
 
     #[allow(dead_code)]

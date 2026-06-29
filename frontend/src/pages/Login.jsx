@@ -101,7 +101,7 @@ export default function Login() {
           
           <div className="mt-8 pt-6 border-t border-gray-200/50 text-center">
             <p className="text-xs text-gray-500">
-              Default: <span className="font-mono font-medium text-gray-700">admin</span> / Check server logs for password
+              ARGUS Firewall &amp; Router Automation Platform
             </p>
           </div>
         </div>

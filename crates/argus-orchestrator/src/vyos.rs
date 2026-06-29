@@ -508,32 +508,95 @@ impl VyosClient {
 
     fn parse_firewall_rules(&self, config: &str) -> Result<Vec<VyosRule>> {
         let mut rules = Vec::new();
-        let mut rule_id = 0u32;
+        let mut current_rule: Option<VyosRule> = None;
+
+        #[derive(Debug, Clone, PartialEq)]
+        enum BlockContext {
+            Rule(u32),
+            Source,
+            Destination,
+            Other,
+        }
+
+        let mut stack = Vec::new();
 
         for line in config.lines() {
             let line = line.trim();
-            if line.starts_with("rule ") {
-                if let Some(rest) = line.strip_prefix("rule ") {
-                    if let Ok(id) = rest.split_whitespace().next().unwrap_or("0").parse::<u32>() {
-                        rule_id = id;
+            if line.is_empty() {
+                continue;
+            }
+
+            // Handle block openings
+            if line.contains('{') {
+                let prefix = line.split('{').next().unwrap_or("").trim();
+                let mut context = BlockContext::Other;
+
+                if prefix.starts_with("rule ") {
+                    if let Some(id_str) = prefix.strip_prefix("rule ") {
+                        if let Ok(id) = id_str.trim().parse::<u32>() {
+                            context = BlockContext::Rule(id);
+                            current_rule = Some(VyosRule {
+                                id,
+                                action: String::new(),
+                                protocol: None,
+                                source: None,
+                                destination: None,
+                            });
+                        }
+                    }
+                } else if prefix == "source" {
+                    context = BlockContext::Source;
+                } else if prefix == "destination" {
+                    context = BlockContext::Destination;
+                }
+
+                stack.push(context);
+                continue;
+            }
+
+            // Handle block closings
+            if line == "}" {
+                if let Some(BlockContext::Rule(_)) = stack.pop() {
+                    if let Some(rule) = current_rule.take() {
+                        rules.push(rule);
+                    }
+                }
+                continue;
+            }
+
+            // Handle properties inside the current active rule context
+            if let Some(ref mut rule) = current_rule {
+                if line.starts_with("action ") {
+                    rule.action = line
+                        .strip_prefix("action ")
+                        .unwrap_or("")
+                        .trim_single_quotes()
+                        .to_string();
+                } else if line.starts_with("protocol ") {
+                    rule.protocol = Some(
+                        line.strip_prefix("protocol ")
+                            .unwrap_or("")
+                            .trim_single_quotes()
+                            .to_string(),
+                    );
+                } else if line.starts_with("address ") {
+                    let addr = line
+                        .strip_prefix("address ")
+                        .unwrap_or("")
+                        .trim_single_quotes()
+                        .to_string();
+                    if stack.last() == Some(&BlockContext::Source) {
+                        rule.source = Some(addr);
+                    } else if stack.last() == Some(&BlockContext::Destination) {
+                        rule.destination = Some(addr);
                     }
                 }
             }
+        }
 
-            if line.starts_with("action ") {
-                let action = line
-                    .strip_prefix("action ")
-                    .unwrap_or("")
-                    .trim_single_quotes()
-                    .to_string();
-                rules.push(VyosRule {
-                    id: rule_id,
-                    action,
-                    protocol: None,
-                    source: None,
-                    destination: None,
-                });
-            }
+        // Fallback for trailing rules not closed explicitly
+        if let Some(rule) = current_rule {
+            rules.push(rule);
         }
 
         Ok(rules)

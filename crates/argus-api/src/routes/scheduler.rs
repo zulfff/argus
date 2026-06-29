@@ -108,6 +108,13 @@ pub async fn create_schedule(
         ));
     }
 
+    if let Err(err_msg) = argus_core::scheduler::validate_cron(&req.cron_expression) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": err_msg, "code": 400})),
+        ));
+    }
+
     let schedule = RuleSchedule {
         id: Uuid::new_v4(),
         rule_id: req.rule_id,

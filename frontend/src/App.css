@@ -1,38 +1,39 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-root: #f8f9fa;
-  --color-bg-panel: #ffffff;
-  --color-bg-elevated: #ffffff;
-  --color-bg-hover: #f5f6f7;
-  --color-bg-border: #e4e7eb;
-  --color-primary: #2563eb;
-  --color-primary-hover: #1d4ed8;
-  --color-primary-light: #dbeafe;
-  --color-success: #059669;
-  --color-success-light: #d1fae5;
-  --color-danger: #dc2626;
-  --color-danger-light: #fee2e2;
-  --color-warning: #d97706;
-  --color-warning-light: #fef3c7;
-  --color-info: #0891b2;
-  --color-info-light: #cffafe;
-  --color-text: #111827;
-  --color-text-sec: #6b7280;
+  --color-bg-root: #070913;
+  --color-bg-panel: rgba(13, 17, 34, 0.45);
+  --color-bg-elevated: rgba(22, 28, 54, 0.65);
+  --color-bg-hover: rgba(43, 54, 87, 0.5);
+  --color-bg-border: rgba(255, 255, 255, 0.08);
+  --color-primary: #3b82f6;
+  --color-primary-hover: #60a5fa;
+  --color-primary-light: rgba(59, 130, 246, 0.15);
+  --color-success: #10b981;
+  --color-success-light: rgba(16, 185, 129, 0.15);
+  --color-danger: #f43f5e;
+  --color-danger-light: rgba(244, 63, 94, 0.15);
+  --color-warning: #fbbf24;
+  --color-warning-light: rgba(251, 191, 36, 0.15);
+  --color-info: #06b6d4;
+  --color-info-light: rgba(6, 182, 212, 0.15);
+  --color-text: #f9fafb;
+  --color-text-sec: #d1d5db;
   --color-text-muted: #9ca3af;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Helvetica Neue', sans-serif;
-  --font-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 2px 8px -1px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 12px 24px -4px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 20px 40px -8px rgba(0, 0, 0, 0.6);
 }
 
 @layer base {
   body {
-    background: var(--color-bg-root);
+    background: radial-gradient(circle at 50% 0%, #111832 0%, #070913 70%);
+    background-attachment: fixed;
     color: var(--color-text);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -44,6 +45,7 @@
   button {
     cursor: pointer;
     font-family: inherit;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   input, select, textarea {
@@ -54,16 +56,16 @@
 }
 
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-@keyframes slideInRow { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
-@keyframes fadeSlideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes livePulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.1); } }
-@keyframes modalIn { from { opacity: 0; transform: scale(0.98) translateY(-4px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-@keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideInRow { from { opacity: 0; transform: translateY(12px); filter: blur(4px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
+@keyframes fadeSlideIn { from { opacity: 0; transform: translateY(16px); filter: blur(6px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
+@keyframes livePulse { 0%,100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 4px rgba(244,63,94,0.4)); } 50% { opacity: 0.8; transform: scale(1.08); filter: drop-shadow(0 0 12px rgba(244,63,94,0.7)); } }
+@keyframes modalIn { from { opacity: 0; transform: scale(0.96) translateY(-8px); filter: blur(8px); } to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); } }
+@keyframes modalFadeIn { from { opacity: 0; backdrop-filter: blur(0px); } to { opacity: 1; backdrop-filter: blur(8px); } }
 @keyframes toastProgress { from { width: 100%; } to { width: 0%; } }
 @keyframes blob { 0%,100% { transform: translate(0, 0) scale(1); } 33% { transform: translate(30px, -50px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } }
 
-@utility animate-slide-in { animation: slideInRow 0.15s ease-out; }
-@utility animate-fade { animation: fadeSlideIn 0.2s ease-out; }
+@utility animate-slide-in { animation: slideInRow 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@utility animate-fade { animation: fadeSlideIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
 @utility animate-live { animation: livePulse 2s infinite; }
 @utility animate-blob { animation: blob 7s infinite; }
 @utility animation-delay-2000 { animation-delay: 2s; }

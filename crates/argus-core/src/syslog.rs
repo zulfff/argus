@@ -70,6 +70,9 @@ impl SyslogForwarder {
 
         let timestamp = Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
         let priority = facility * 8 + severity;
+        let hostname_safe = sanitize_syslog(hostname);
+        let app_name_safe = sanitize_syslog(app_name);
+        let msg_safe = sanitize_syslog(msg);
 
         for config in &configs {
             if !config.enabled {
@@ -92,7 +95,7 @@ impl SyslogForwarder {
 
             let syslog_msg = format!(
                 "<{}>1 {} {} {} - - - {}",
-                priority, timestamp, hostname, app_name, msg
+                priority, timestamp, hostname_safe, app_name_safe, msg_safe
             );
 
             match config.protocol {
@@ -106,7 +109,7 @@ impl SyslogForwarder {
                 }
                 SyslogProtocol::Udp => {
                     let addr = format!("{}:{}", config.server, config.port);
-                    if let Ok(socket) = tokio::net::UdpSocket::bind("127.0.0.1:0").await {
+                    if let Ok(socket) = tokio::net::UdpSocket::bind("0.0.0.0:0").await {
                         let _ = socket.send_to(syslog_msg.as_bytes(), &addr).await;
                     }
                 }
@@ -119,4 +122,10 @@ impl Default for SyslogForwarder {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn sanitize_syslog(s: &str) -> String {
+    s.replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\0', "")
 }

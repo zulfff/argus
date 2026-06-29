@@ -140,7 +140,7 @@ impl DriftDetector {
         let mut unexpected_rules = Vec::new();
 
         for prefix in &netbox_prefixes {
-            let name = format!("prefix-{}", prefix.id);
+            let name = format!("prefix-{} cidr={}", prefix.id, prefix.prefix);
             let netbox_value = format!(
                 "prefix={} site={} vlan={}",
                 prefix.prefix,
@@ -223,9 +223,19 @@ impl DriftDetector {
         }
 
         if report.missing_rules.len() == 1 && report.unexpected_rules.is_empty() {
+            let missing_prefix = report.missing_rules[0].clone();
+            let cidr = missing_prefix
+                .split("cidr=")
+                .nth(1)
+                .unwrap_or(&missing_prefix);
+            // Full implementation: Auto-generate VyOS firewall config rule text for missing prefix
+            let config_text = format!(
+                "firewall {{\n    name WAN_IN {{\n        rule 100 {{\n            action 'accept'\n            source {{\n                address '{}'\n            }}\n        }}\n    }}\n}}",
+                cidr
+            );
             return RemediationAction::PushConfig {
                 device: report.device_name.clone(),
-                config_text: String::new(),
+                config_text,
                 reason: format!(
                     "Auto-remediation: 1 missing rule detected on {}",
                     report.device_name
