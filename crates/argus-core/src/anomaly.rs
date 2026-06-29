@@ -265,7 +265,7 @@ impl Default for AnomalyDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::Ipv4Addr;
+    
 
     #[test]
     fn test_baseline_computation() {

@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
+use dashmap::DashMap;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Mutex;
-use dashmap::DashMap;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct IpReputation {
@@ -22,7 +22,12 @@ pub struct ReputationManager {
     pub active_threats: DashMap<IpAddr, crate::threat_intel::ThreatEntry>,
 }
 
-pub fn calculate_score(source: &str, source_score: f64, confidence: f64, recency_factor: f64) -> f64 {
+pub fn calculate_score(
+    source: &str,
+    source_score: f64,
+    confidence: f64,
+    recency_factor: f64,
+) -> f64 {
     let weight = match source {
         "CrowdSec" => 1.8,
         "Internal" => 2.0,
@@ -79,11 +84,25 @@ impl ReputationManager {
                 self.active_threats.insert(ip, entry.clone());
                 if ip.is_ipv4() {
                     if let Ok(ipv4) = ip.to_string().parse::<std::net::Ipv4Addr>() {
-                        ipv4_entries.push((ipv4, 32, crate::ebpf::ReputationValue { score: -50, category: 1 }));
+                        ipv4_entries.push((
+                            ipv4,
+                            32,
+                            crate::ebpf::ReputationValue {
+                                score: -50,
+                                category: 1,
+                            },
+                        ));
                     }
                 } else {
                     if let Ok(ipv6) = ip.to_string().parse::<std::net::Ipv6Addr>() {
-                        ipv6_entries.push((ipv6, 128, crate::ebpf::ReputationValue { score: -50, category: 1 }));
+                        ipv6_entries.push((
+                            ipv6,
+                            128,
+                            crate::ebpf::ReputationValue {
+                                score: -50,
+                                category: 1,
+                            },
+                        ));
                     }
                 }
             } else if let Some(ref cidr_str) = entry.cidr {
@@ -91,11 +110,25 @@ impl ReputationManager {
                     self.active_threats.insert(ip_net.ip(), entry.clone());
                     if ip_net.ip().is_ipv4() {
                         if let Ok(ipv4) = ip_net.ip().to_string().parse::<std::net::Ipv4Addr>() {
-                            ipv4_entries.push((ipv4, ip_net.prefix() as u32, crate::ebpf::ReputationValue { score: -50, category: 1 }));
+                            ipv4_entries.push((
+                                ipv4,
+                                ip_net.prefix() as u32,
+                                crate::ebpf::ReputationValue {
+                                    score: -50,
+                                    category: 1,
+                                },
+                            ));
                         }
                     } else {
                         if let Ok(ipv6) = ip_net.ip().to_string().parse::<std::net::Ipv6Addr>() {
-                            ipv6_entries.push((ipv6, ip_net.prefix() as u32, crate::ebpf::ReputationValue { score: -50, category: 1 }));
+                            ipv6_entries.push((
+                                ipv6,
+                                ip_net.prefix() as u32,
+                                crate::ebpf::ReputationValue {
+                                    score: -50,
+                                    category: 1,
+                                },
+                            ));
                         }
                     }
                 }
@@ -106,7 +139,6 @@ impl ReputationManager {
 
         Ok(())
     }
-
 
     pub fn adjust_score(&self, ip: IpAddr, delta: i32, reason: &str) {
         let Ok(mut entries) = self.entries.lock() else {

@@ -97,17 +97,19 @@ pub async fn ws_handler(
     if let Some(origin) = headers.get(header::ORIGIN) {
         if let Ok(origin_str) = origin.to_str() {
             if let Ok(allowed) = std::env::var("ARGUS_ALLOWED_ORIGINS") {
-                let allowed_origins: Vec<&str> = allowed.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+                let allowed_origins: Vec<&str> = allowed
+                    .split(',')
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .collect();
                 if !allowed_origins.is_empty() && !allowed_origins.contains(&origin_str) {
-                    return Err((
-                        StatusCode::FORBIDDEN,
-                        "WebSocket origin not allowed".into(),
-                    ));
+                    return Err((StatusCode::FORBIDDEN, "WebSocket origin not allowed".into()));
                 }
             } else if std::env::var("ARGUS_PRODUCTION").is_ok() {
                 return Err((
                     StatusCode::FORBIDDEN,
-                    "WebSocket origin must be validated in production. Set ARGUS_ALLOWED_ORIGINS.".into(),
+                    "WebSocket origin must be validated in production. Set ARGUS_ALLOWED_ORIGINS."
+                        .into(),
                 ));
             }
         }

@@ -257,7 +257,9 @@ impl AlertManager {
                 ChannelType::Webhook => {
                     if let Some(url) = channel.config.get("url").and_then(|v| v.as_str()) {
                         if Self::validate_channel_url(url).is_err() {
-                            tracing::warn!("Skipping webhook notification: URL failed re-validation");
+                            tracing::warn!(
+                                "Skipping webhook notification: URL failed re-validation"
+                            );
                             continue;
                         }
                         let _ = client.post(url).json(&payload).send().await;
@@ -278,7 +280,9 @@ impl AlertManager {
                 ChannelType::Discord => {
                     if let Some(url) = channel.config.get("webhook_url").and_then(|v| v.as_str()) {
                         if Self::validate_channel_url(url).is_err() {
-                            tracing::warn!("Skipping discord notification: URL failed re-validation");
+                            tracing::warn!(
+                                "Skipping discord notification: URL failed re-validation"
+                            );
                             continue;
                         }
                         let discord_payload = serde_json::json!({
@@ -338,7 +342,12 @@ impl AlertManager {
         let lower = host.to_lowercase();
         if lower.starts_with("[::ffff:") && lower.ends_with(']') {
             let inner = &lower[8..lower.len() - 1];
-            if inner == "127.0.0.1" || inner == "169.254.169.254" || inner == "10." || inner.starts_with("172.") || inner.starts_with("192.168.") {
+            if inner == "127.0.0.1"
+                || inner == "169.254.169.254"
+                || inner == "10."
+                || inner.starts_with("172.")
+                || inner.starts_with("192.168.")
+            {
                 return Err(());
             }
         }
@@ -357,7 +366,10 @@ impl AlertManager {
                 return Err(());
             }
             if let Some(ipv4) = addr.to_ipv4_mapped() {
-                if ipv4.is_loopback() || ipv4.is_private() || ipv4 == std::net::Ipv4Addr::new(169, 254, 169, 254) {
+                if ipv4.is_loopback()
+                    || ipv4.is_private()
+                    || ipv4 == std::net::Ipv4Addr::new(169, 254, 169, 254)
+                {
                     return Err(());
                 }
             }

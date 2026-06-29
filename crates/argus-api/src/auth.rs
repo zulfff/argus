@@ -476,7 +476,12 @@ impl JwtAuth {
             aud: "argus-api".into(),
             jti: Uuid::new_v4().to_string(),
             token_type: "access".into(),
-            parent_jti: Some(claims.parent_jti.clone().unwrap_or_else(|| claims.jti.clone())),
+            parent_jti: Some(
+                claims
+                    .parent_jti
+                    .clone()
+                    .unwrap_or_else(|| claims.jti.clone()),
+            ),
         };
 
         let refresh_claims = Claims {
@@ -490,7 +495,12 @@ impl JwtAuth {
             aud: "argus-api".into(),
             jti: Uuid::new_v4().to_string(),
             token_type: "refresh".into(),
-            parent_jti: Some(claims.parent_jti.clone().unwrap_or_else(|| claims.jti.clone())),
+            parent_jti: Some(
+                claims
+                    .parent_jti
+                    .clone()
+                    .unwrap_or_else(|| claims.jti.clone()),
+            ),
         };
 
         let access_token = encode(&Header::default(), &access_claims, &self.encoding_key)

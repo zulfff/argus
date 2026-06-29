@@ -10,9 +10,9 @@ use network_types::{
 };
 
 use crate::maps::{
-    CONNTRACK, DST_ALLOWLIST, DST_ALLOWLIST_V6, DST_BLOCKLIST, DST_BLOCKLIST_V6, PER_CPU_PACKETS,
-    RATE_LIMIT_BUCKETS, SRC_ALLOWLIST, SRC_ALLOWLIST_V6, SRC_BLOCKLIST, SRC_BLOCKLIST_V6,
-    IP_REPUTATION_V4, IP_REPUTATION_V6, THREAT_STATS, EVENTS, ThreatCounter,
+    ThreatCounter, CONNTRACK, DST_ALLOWLIST, DST_ALLOWLIST_V6, DST_BLOCKLIST, DST_BLOCKLIST_V6,
+    EVENTS, IP_REPUTATION_V4, IP_REPUTATION_V6, PER_CPU_PACKETS, RATE_LIMIT_BUCKETS, SRC_ALLOWLIST,
+    SRC_ALLOWLIST_V6, SRC_BLOCKLIST, SRC_BLOCKLIST_V6, THREAT_STATS,
 };
 
 const ETH_HDR_LEN: usize = core::mem::size_of::<EthHdr>();
@@ -107,7 +107,7 @@ unsafe fn handle_ipv4(_ctx: XdpContext, data: usize, data_end: usize) -> Result<
             buf[0] = 1; // event type: 1 = reputation block
             buf[1..5].copy_from_slice(&src_ip.to_be_bytes());
             buf[5..9].copy_from_slice(&rep.score.to_be_bytes());
-            let _ = EVENTS.output(&_ctx, &buf, 0);
+            EVENTS.output(&_ctx, &buf, 0);
 
             return Ok(xdp_action::XDP_DROP);
         }
@@ -206,7 +206,7 @@ unsafe fn handle_ipv6(_ctx: XdpContext, data: usize, data_end: usize) -> Result<
             buf[0] = 2; // event type: 2 = reputation block v6
             buf[1..17].copy_from_slice(&src_addr.to_be_bytes());
             buf[17..21].copy_from_slice(&rep.score.to_be_bytes());
-            let _ = EVENTS.output(&_ctx, &buf, 0);
+            EVENTS.output(&_ctx, &buf, 0);
 
             return Ok(xdp_action::XDP_DROP);
         }

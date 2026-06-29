@@ -255,7 +255,10 @@ impl MultiWanManager {
         if let Some(ref active_name) = current_active {
             let primary_link = {
                 let links = self.links.lock().expect("links lock");
-                links.values().find(|l| l.is_primary).map(|l| l.name.clone())
+                links
+                    .values()
+                    .find(|l| l.is_primary)
+                    .map(|l| l.name.clone())
             };
             if let Some(ref primary_name) = primary_link {
                 if active_name != primary_name {

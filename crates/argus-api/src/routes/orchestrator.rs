@@ -54,9 +54,11 @@ pub async fn get_drift_status(
                 tracing::error!("Orchestrator drift check failed: {:#}", e);
                 Ok(Json(DriftStatusResponse {
                     configured: true,
-                    reports: vec![serde_json::json!({"error": "Drift detection failed — check server logs"})],
+                    reports: vec![
+                        serde_json::json!({"error": "Drift detection failed — check server logs"}),
+                    ],
                 }))
-            },
+            }
         },
         None => Ok(Json(DriftStatusResponse {
             configured: false,
@@ -123,8 +125,10 @@ pub async fn get_netbox_devices(
             }))),
             Err(e) => {
                 error!("NetBox get_devices failed: {:#}", e);
-                Ok(Json(serde_json::json!({"error": "Failed to fetch devices — check server logs"})))
-            },
+                Ok(Json(
+                    serde_json::json!({"error": "Failed to fetch devices — check server logs"}),
+                ))
+            }
         },
         None => Ok(Json(serde_json::json!({
             "error": "Orchestrator not configured (set NETBOX_URL and NETBOX_TOKEN)"

@@ -169,7 +169,13 @@ pub async fn create_user(
             Json(serde_json::json!({"error": "Username must be 1-128 characters", "code": 400})),
         ));
     }
-    if state.auth_config.user_store.find_by_username(&req.username).await.is_some() {
+    if state
+        .auth_config
+        .user_store
+        .find_by_username(&req.username)
+        .await
+        .is_some()
+    {
         return Err((
             StatusCode::CONFLICT,
             Json(serde_json::json!({"error": "Username already exists", "code": 409})),

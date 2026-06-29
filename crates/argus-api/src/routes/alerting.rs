@@ -40,7 +40,10 @@ fn redact_channel(ch: NotificationChannel) -> NotificationChannel {
     if let Some(map) = map {
         for key in &["webhook_url", "url", "smtp_url", "to", "from"] {
             if map.contains_key(*key) {
-                map.insert(key.to_string(), serde_json::Value::String("[REDACTED]".into()));
+                map.insert(
+                    key.to_string(),
+                    serde_json::Value::String("[REDACTED]".into()),
+                );
             }
         }
     }

@@ -51,7 +51,8 @@ impl AuditLog {
         let mut entries = match self.entries.lock() {
             Ok(e) => e,
             Err(_) => {
-                let hash = Self::compute_hash(&id, now, actor, action, resource, details, "genesis");
+                let hash =
+                    Self::compute_hash(&id, now, actor, action, resource, details, "genesis");
                 return AuditEntry {
                     id,
                     timestamp: now,

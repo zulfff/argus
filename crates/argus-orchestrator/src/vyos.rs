@@ -509,7 +509,7 @@ impl VyosClient {
     fn parse_firewall_rules(&self, config: &str) -> Result<Vec<VyosRule>> {
         let mut rules = Vec::new();
         let mut current_rule: Option<VyosRule> = None;
-        
+
         #[derive(Debug, Clone, PartialEq)]
         enum BlockContext {
             Rule(u32),
@@ -517,7 +517,7 @@ impl VyosClient {
             Destination,
             Other,
         }
-        
+
         let mut stack = Vec::new();
 
         for line in config.lines() {
@@ -575,11 +575,12 @@ impl VyosClient {
                         .trim_single_quotes()
                         .to_string();
                 } else if line.starts_with("protocol ") {
-                    rule.protocol = Some(line
-                        .strip_prefix("protocol ")
-                        .unwrap_or("")
-                        .trim_single_quotes()
-                        .to_string());
+                    rule.protocol = Some(
+                        line.strip_prefix("protocol ")
+                            .unwrap_or("")
+                            .trim_single_quotes()
+                            .to_string(),
+                    );
                 } else if line.starts_with("address ") {
                     let addr = line
                         .strip_prefix("address ")

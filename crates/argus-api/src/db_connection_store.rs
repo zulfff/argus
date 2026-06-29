@@ -61,14 +61,14 @@ impl PostgresConnectionStore {
             IpAddr::V4(ip) => ip.octets().to_vec(),
             IpAddr::V6(ip) => ip.octets().to_vec(),
         };
-        
+
         let mut hasher = sha2::Sha256::default();
         use sha2::Digest;
         hasher.update(&src_bytes);
         hasher.update(&dst_bytes);
-        hasher.update(&entry.src_port.to_be_bytes());
-        hasher.update(&entry.dst_port.to_be_bytes());
-        hasher.update(&[entry.protocol]);
+        hasher.update(entry.src_port.to_be_bytes());
+        hasher.update(entry.dst_port.to_be_bytes());
+        hasher.update([entry.protocol]);
         let hash = hasher.finalize();
         uuid_bytes.copy_from_slice(&hash[..16]);
         let entry_id = uuid::Uuid::from_bytes(uuid_bytes);

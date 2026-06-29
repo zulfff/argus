@@ -322,7 +322,10 @@ impl ThreatIntelligence {
                             metadata: None,
                         },
                     );
-                    if let Some(existing) = cidr_entries.iter_mut().find(|e| e.cidr.as_deref() == Some(cidr)) {
+                    if let Some(existing) = cidr_entries
+                        .iter_mut()
+                        .find(|e| e.cidr.as_deref() == Some(cidr))
+                    {
                         existing.expires_at = expires_at;
                     } else {
                         cidr_entries.push(ThreatEntry {

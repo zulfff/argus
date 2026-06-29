@@ -494,7 +494,8 @@ async fn serve_docs() -> impl axum::response::IntoResponse {
     let sri_attr = std::env::var("ARGUS_SCALAR_SRI")
         .map(|s| format!("integrity=\"{}\" crossorigin=\"anonymous\"", s))
         .unwrap_or_default();
-    let html = format!(r##"<!DOCTYPE html>
+    let html = format!(
+        r##"<!DOCTYPE html>
 <html>
 <head>
   <title>ARGUS API Docs</title>
@@ -506,7 +507,9 @@ async fn serve_docs() -> impl axum::response::IntoResponse {
   <script id="api-reference" data-url="/api/v1/openapi.yaml"></script>
   <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference" {sri_attr}></script>
 </body>
-</html>"##, sri_attr = sri_attr);
+</html>"##,
+        sri_attr = sri_attr
+    );
     (
         [(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
         html,
@@ -522,10 +525,7 @@ fn generate_secret() -> Vec<u8> {
 fn generate_passphrase() -> String {
     let mut buf = [0u8; 24];
     rand::thread_rng().fill_bytes(&mut buf);
-    base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        buf,
-    )
+    base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, buf)
 }
 
 #[tokio::main]
@@ -657,9 +657,10 @@ async fn try_main() -> anyhow::Result<()> {
     };
 
     let is_production = std::env::var("ARGUS_PRODUCTION").is_ok() || db_pool.is_some();
-    let tls_configured = std::env::var("ARGUS_TLS_CERT").ok().and_then(|c| {
-        std::env::var("ARGUS_TLS_KEY").ok().map(|_| !c.is_empty())
-    }).unwrap_or(false);
+    let tls_configured = std::env::var("ARGUS_TLS_CERT")
+        .ok()
+        .and_then(|c| std::env::var("ARGUS_TLS_KEY").ok().map(|_| !c.is_empty()))
+        .unwrap_or(false);
 
     info!("Setting up JWT secret...");
     let jwt_secret = match std::env::var("ARGUS_JWT_SECRET") {
@@ -693,7 +694,10 @@ async fn try_main() -> anyhow::Result<()> {
     let admin_pass = match std::env::var("ARGUS_ADMIN_PASS") {
         Ok(p) if p.len() >= 8 => p,
         Ok(p) => {
-            warn!("ARGUS_ADMIN_PASS too short ({} chars), generating random password", p.len());
+            warn!(
+                "ARGUS_ADMIN_PASS too short ({} chars), generating random password",
+                p.len()
+            );
             let random = generate_passphrase();
             info!("Generated random admin password");
             admin_pass_set = false;
@@ -805,7 +809,11 @@ async fn try_main() -> anyhow::Result<()> {
     tokio::spawn(async move {
         loop {
             if let Some(ref db_pool) = state_bg.db_pool {
-                if let Err(e) = state_bg.reputation_manager.sync_reputation_flow(db_pool, &state_bg.ebpf_controller).await {
+                if let Err(e) = state_bg
+                    .reputation_manager
+                    .sync_reputation_flow(db_pool, &state_bg.ebpf_controller)
+                    .await
+                {
                     tracing::error!("Reputation sync flow failed: {}", e);
                 }
             }
