@@ -265,7 +265,6 @@ impl Default for AnomalyDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
 
     #[test]
     fn test_baseline_computation() {
