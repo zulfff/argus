@@ -51,7 +51,7 @@ impl PostgresRuleStore {
                 metadata JSONB,
                 CONSTRAINT chk_ip_or_cidr_present CHECK (ip_address IS NOT NULL OR cidr IS NOT NULL)
             );
-            CREATE INDEX IF NOT EXISTS idx_active_threats ON threat_entries(expires_at) WHERE expires_at > NOW();"
+            CREATE INDEX IF NOT EXISTS idx_threats_expires ON threat_entries(expires_at);"
         )
         .execute(&pool)
         .await?;

@@ -123,16 +123,10 @@ impl VpnPortalManager {
             return None;
         }
 
-        // Generate actual ephemeral Curve25519 key-pair for WireGuard client
-        let private_key = x25519_dalek::StaticSecret::random_from_rng(rand::thread_rng());
-        let _public_key = x25519_dalek::PublicKey::from(&private_key);
-
-        let private_b64 =
-            base64::Engine::encode(&base64::prelude::BASE64_STANDARD, private_key.to_bytes());
-
+        // Use the peer's approved public key (client owns the corresponding private key)
         let config = format!(
             "[Interface]\n\
-             PrivateKey = {}\n\
+             PrivateKey = <client-private-key>\n\
              Address = {}\n\
              DNS = 1.1.1.1\n\n\
              [Peer]\n\
@@ -140,7 +134,7 @@ impl VpnPortalManager {
              Endpoint = {}\n\
              AllowedIPs = 0.0.0.0/0\n\
              PersistentKeepalive = 25\n",
-            private_b64, req.allowed_ips, server_public_key, endpoint
+            req.allowed_ips, server_public_key, endpoint
         );
         Some(config)
     }
