@@ -556,11 +556,9 @@ impl VyosClient {
 
             // Handle block closings
             if line == "}" {
-                if let Some(popped) = stack.pop() {
-                    if let BlockContext::Rule(_) = popped {
-                        if let Some(rule) = current_rule.take() {
-                            rules.push(rule);
-                        }
+                if let Some(BlockContext::Rule(_)) = stack.pop() {
+                    if let Some(rule) = current_rule.take() {
+                        rules.push(rule);
                     }
                 }
                 continue;

@@ -264,19 +264,17 @@ impl EbpfController {
                     .map_err(|e| ArgusError::External(format!("PerCpuHashMap access: {}", e)))?;
 
             let mut stats = std::collections::HashMap::new();
-            for item in hashmap.iter() {
-                if let Ok((k, v)) = item {
-                    // Aggregate PerCpu values
-                    let aggregated_drops = v.iter().map(|c| c.drops).sum();
-                    let max_last_seen = v.iter().map(|c| c.last_seen).max().unwrap_or(0);
-                    stats.insert(
-                        k,
-                        ThreatCounter {
-                            drops: aggregated_drops,
-                            last_seen: max_last_seen,
-                        },
-                    );
-                }
+            for (k, v) in hashmap.iter().flatten() {
+                // Aggregate PerCpu values
+                let aggregated_drops = v.iter().map(|c| c.drops).sum();
+                let max_last_seen = v.iter().map(|c| c.last_seen).max().unwrap_or(0);
+                stats.insert(
+                    k,
+                    ThreatCounter {
+                        drops: aggregated_drops,
+                        last_seen: max_last_seen,
+                    },
+                );
             }
             Ok(stats)
         })
