@@ -12,6 +12,7 @@ pub struct ZtnaPeer {
     pub id: Uuid,
     pub name: String,
     pub public_key: String,
+    #[serde(skip)]
     pub private_key: Option<String>,
     pub endpoint: SocketAddr,
     pub allowed_ips: Vec<String>,
@@ -35,6 +36,7 @@ pub enum PeerRole {
 pub struct WireGuardInterface {
     pub name: String,
     pub listen_port: u16,
+    #[serde(skip)]
     pub private_key: String,
     pub address: Vec<String>,
     pub dns: Vec<String>,

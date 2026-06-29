@@ -38,7 +38,25 @@ impl PostgresRuleStore {
         .execute(&pool)
         .await?;
 
-        info!("PostgresRuleStore: rules table ready");
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS threat_entries (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                ip_address INET,
+                cidr CIDR,
+                source TEXT NOT NULL,
+                reason TEXT,
+                added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                expires_at TIMESTAMPTZ NOT NULL,
+                last_seen TIMESTAMPTZ,
+                metadata JSONB,
+                CONSTRAINT chk_ip_or_cidr_present CHECK (ip_address IS NOT NULL OR cidr IS NOT NULL)
+            );
+            CREATE INDEX IF NOT EXISTS idx_active_threats ON threat_entries(expires_at) WHERE expires_at > NOW();"
+        )
+        .execute(&pool)
+        .await?;
+
+        info!("PostgresRuleStore: rules and threat_entries tables ready");
         Ok(Self { pool })
     }
 }

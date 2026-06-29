@@ -1,6 +1,7 @@
 use axum::{extract::State, http::StatusCode, Extension, Json};
 use serde::Serialize;
 use std::sync::Arc;
+use tracing::error;
 
 use crate::auth::Claims;
 use crate::AppState;
@@ -49,10 +50,13 @@ pub async fn get_drift_status(
                     reports: reports_json,
                 }))
             }
-            Err(e) => Ok(Json(DriftStatusResponse {
-                configured: true,
-                reports: vec![serde_json::json!({"error": e.to_string()})],
-            })),
+            Err(e) => {
+                tracing::error!("Orchestrator drift check failed: {:#}", e);
+                Ok(Json(DriftStatusResponse {
+                    configured: true,
+                    reports: vec![serde_json::json!({"error": "Drift detection failed — check server logs"})],
+                }))
+            },
         },
         None => Ok(Json(DriftStatusResponse {
             configured: false,
@@ -79,16 +83,19 @@ pub async fn trigger_reconciliation(
                 Ok(Json(ReconciliationResponse {
                     triggered: true,
                     message: format!(
-                        "Reconciliation complete: {} devices checked, {} need remediation",
+                        "Reconciliation complete: {} reports, {} need remediation (use auto-remediation to fix)",
                         reports.len(),
                         needs_fix.len()
                     ),
                 }))
             }
-            Err(e) => Ok(Json(ReconciliationResponse {
-                triggered: true,
-                message: format!("Reconciliation failed: {}", e),
-            })),
+            Err(e) => {
+                tracing::error!("Orchestrator reconciliation failed: {:#}", e);
+                Ok(Json(ReconciliationResponse {
+                    triggered: true,
+                    message: "Reconciliation failed — check server logs".into(),
+                }))
+            }
         },
         None => Ok(Json(ReconciliationResponse {
             triggered: false,
@@ -114,7 +121,10 @@ pub async fn get_netbox_devices(
                 "devices": devices,
                 "count": devices.len()
             }))),
-            Err(e) => Ok(Json(serde_json::json!({"error": e.to_string()}))),
+            Err(e) => {
+                error!("NetBox get_devices failed: {:#}", e);
+                Ok(Json(serde_json::json!({"error": "Failed to fetch devices — check server logs"})))
+            },
         },
         None => Ok(Json(serde_json::json!({
             "error": "Orchestrator not configured (set NETBOX_URL and NETBOX_TOKEN)"

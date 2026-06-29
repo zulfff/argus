@@ -151,6 +151,58 @@ impl SchedulerEngine {
     }
 }
 
+pub fn validate_cron(expression: &str) -> Result<(), String> {
+    let parts: Vec<&str> = expression.split_whitespace().collect();
+    if parts.len() != 5 {
+        return Err("Cron expression must have exactly 5 fields".to_string());
+    }
+
+    let limits = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 6)];
+    for (i, &field) in parts.iter().enumerate() {
+        let (min, max) = limits[i];
+        if field == "*" {
+            continue;
+        }
+
+        // Validate multiple comma-separated entries
+        for p in field.split(',') {
+            if p.contains('/') {
+                let s: Vec<&str> = p.split('/').collect();
+                if s.len() != 2 {
+                    return Err(format!("Invalid step expression: {}", p));
+                }
+                let base = s[0];
+                let step = s[1].parse::<i32>().map_err(|_| format!("Invalid step value: {}", s[1]))?;
+                if step <= 0 {
+                    return Err("Step value must be positive".to_string());
+                }
+                if base != "*" {
+                    let b = base.parse::<i32>().map_err(|_| format!("Invalid step base: {}", base))?;
+                    if b < min || b > max {
+                        return Err(format!("Base value {} out of range", b));
+                    }
+                }
+            } else if p.contains('-') {
+                let s: Vec<&str> = p.split('-').collect();
+                if s.len() != 2 {
+                    return Err(format!("Invalid range expression: {}", p));
+                }
+                let low = s[0].parse::<i32>().map_err(|_| format!("Invalid range start: {}", s[0]))?;
+                let high = s[1].parse::<i32>().map_err(|_| format!("Invalid range end: {}", s[1]))?;
+                if low < min || low > max || high < min || high > max || low > high {
+                    return Err(format!("Range {}-{} is invalid or out of limits", low, high));
+                }
+            } else {
+                let val = p.parse::<i32>().map_err(|_| format!("Invalid numeric value: {}", p))?;
+                if val < min || val > max {
+                    return Err(format!("Value {} out of range ({}-{})", val, min, max));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn cron_matches(expression: &str, now: DateTime<Utc>) -> bool {
     let parts: Vec<&str> = expression.split_whitespace().collect();
     if parts.len() != 5 {

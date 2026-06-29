@@ -48,11 +48,28 @@ impl AuditLog {
         let now = Utc::now();
         let id = Uuid::new_v4();
 
-        let previous_hash = self
-            .entries
-            .lock()
-            .ok()
-            .and_then(|e| e.back().map(|prev| prev.hash.clone()))
+        let mut entries = match self.entries.lock() {
+            Ok(e) => e,
+            Err(_) => {
+                let hash = Self::compute_hash(&id, now, actor, action, resource, details, "genesis");
+                return AuditEntry {
+                    id,
+                    timestamp: now,
+                    actor: actor.to_string(),
+                    action: action.to_string(),
+                    resource: resource.to_string(),
+                    details: details.to_string(),
+                    ip_address: ip_address.map(String::from),
+                    success,
+                    hash,
+                    previous_hash: String::new(),
+                };
+            }
+        };
+
+        let previous_hash = entries
+            .back()
+            .map(|prev| prev.hash.clone())
             .unwrap_or_else(|| {
                 let mut hasher = Sha256::new();
                 hasher.update(b"genesis");
@@ -74,11 +91,9 @@ impl AuditLog {
             previous_hash,
         };
 
-        if let Ok(mut entries) = self.entries.lock() {
-            entries.push_back(entry.clone());
-            while entries.len() > self.max_entries {
-                entries.pop_front();
-            }
+        entries.push_back(entry.clone());
+        while entries.len() > self.max_entries {
+            entries.pop_front();
         }
 
         entry
@@ -133,9 +148,7 @@ impl AuditLog {
 
         for (i, entry) in entries.iter().enumerate() {
             if first {
-                let mut gen_hasher = Sha256::new();
-                gen_hasher.update(b"genesis");
-                expected_previous = hex::encode(gen_hasher.finalize());
+                expected_previous = entry.previous_hash.clone();
                 first = false;
             }
 

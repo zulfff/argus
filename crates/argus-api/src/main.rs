@@ -76,6 +76,7 @@ pub struct AppState {
     pub anomaly_detector: Arc<AnomalyDetector>,
     pub wasm_plugin_engine: Arc<argus_core::wasm_plugin::WasmPluginEngine>,
     pub is_production: bool,
+    pub tls_configured: bool,
     pub connection_drainer: Arc<argus_core::connection_draining::ConnectionDrainer>,
     pub rule_stats_tracker: Arc<argus_core::rule_stats::RuleStatsTracker>,
 }
@@ -95,6 +96,14 @@ pub fn app(state: Arc<AppState>) -> Router {
             .burst_size(10)
             .finish()
             .expect("login governor config builder failed"),
+    );
+
+    let refresh_governor_config = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(30)
+            .burst_size(60)
+            .finish()
+            .expect("refresh governor config builder failed"),
     );
 
     let cors = if let Ok(allowed_origins) = std::env::var("ARGUS_ALLOWED_ORIGINS") {
@@ -431,7 +440,7 @@ pub fn app(state: Arc<AppState>) -> Router {
             middleware::auth_middleware,
         ));
 
-    Router::new()
+    let mut router = Router::new()
         .route("/health", axum::routing::get(|| async { "OK" }))
         .route(
             "/api/v1/auth/login",
@@ -441,7 +450,9 @@ pub fn app(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v1/auth/refresh",
-            axum::routing::post(routes::auth_routes::refresh),
+            axum::routing::post(routes::auth_routes::refresh).layer(GovernorLayer {
+                config: refresh_governor_config,
+            }),
         )
         .route("/api/v1/ws", axum::routing::get(websocket::ws_handler))
         .route("/api/v1/openapi.yaml", axum::routing::get(serve_api_spec))
@@ -459,8 +470,16 @@ pub fn app(state: Arc<AppState>) -> Router {
         .layer(SetResponseHeaderLayer::if_not_present(
             axum::http::header::X_FRAME_OPTIONS,
             axum::http::HeaderValue::from_static("DENY"),
-        ))
-        .with_state(state)
+        ));
+
+    if state.tls_configured {
+        router = router.layer(SetResponseHeaderLayer::if_not_present(
+            axum::http::header::STRICT_TRANSPORT_SECURITY,
+            axum::http::HeaderValue::from_static("max-age=31536000; includeSubDomains; preload"),
+        ));
+    }
+
+    router.with_state(state)
 }
 
 async fn serve_api_spec() -> impl axum::response::IntoResponse {
@@ -472,19 +491,22 @@ async fn serve_api_spec() -> impl axum::response::IntoResponse {
 }
 
 async fn serve_docs() -> impl axum::response::IntoResponse {
-    let html = r##"<!DOCTYPE html>
+    let sri_attr = std::env::var("ARGUS_SCALAR_SRI")
+        .map(|s| format!("integrity=\"{}\" crossorigin=\"anonymous\"", s))
+        .unwrap_or_default();
+    let html = format!(r##"<!DOCTYPE html>
 <html>
 <head>
   <title>ARGUS API Docs</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>body{margin:0;background:#0a0c0f;}</style>
+  <style>body{{margin:0;background:#0a0c0f;}}</style>
 </head>
 <body>
   <script id="api-reference" data-url="/api/v1/openapi.yaml"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference" {sri_attr}></script>
 </body>
-</html>"##;
+</html>"##, sri_attr = sri_attr);
     (
         [(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
         html,
@@ -495,6 +517,15 @@ fn generate_secret() -> Vec<u8> {
     let mut buf = [0u8; 64];
     rand::thread_rng().fill_bytes(&mut buf);
     buf.to_vec()
+}
+
+fn generate_passphrase() -> String {
+    let mut buf = [0u8; 24];
+    rand::thread_rng().fill_bytes(&mut buf);
+    base64::Engine::encode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        buf,
+    )
 }
 
 #[tokio::main]
@@ -626,6 +657,9 @@ async fn try_main() -> anyhow::Result<()> {
     };
 
     let is_production = std::env::var("ARGUS_PRODUCTION").is_ok() || db_pool.is_some();
+    let tls_configured = std::env::var("ARGUS_TLS_CERT").ok().and_then(|c| {
+        std::env::var("ARGUS_TLS_KEY").ok().map(|_| !c.is_empty())
+    }).unwrap_or(false);
 
     info!("Setting up JWT secret...");
     let jwt_secret = match std::env::var("ARGUS_JWT_SECRET") {
@@ -654,7 +688,27 @@ async fn try_main() -> anyhow::Result<()> {
     let auth_config = AuthConfig::new(jwt_secret);
 
     let admin_user = std::env::var("ARGUS_ADMIN_USER").unwrap_or_else(|_| "admin".into());
-    let admin_pass = std::env::var("ARGUS_ADMIN_PASS").unwrap_or_else(|_| "123456".into());
+    #[allow(unused_mut)]
+    let mut admin_pass_set = true;
+    let admin_pass = match std::env::var("ARGUS_ADMIN_PASS") {
+        Ok(p) if p.len() >= 8 => p,
+        Ok(p) => {
+            warn!("ARGUS_ADMIN_PASS too short ({} chars), generating random password", p.len());
+            let random = generate_passphrase();
+            info!("Generated random admin password");
+            admin_pass_set = false;
+            random
+        }
+        Err(_) => {
+            warn!("ARGUS_ADMIN_PASS not set, generating random admin password");
+            let random = generate_passphrase();
+            info!("Generated random admin password (see below)");
+            eprintln!("  Password: {}", random);
+            admin_pass_set = false;
+            random
+        }
+    };
+    let _ = admin_pass_set; // used in banner display
 
     let existing = auth_config.user_store.list_users().await;
     if existing.is_empty() {
@@ -735,6 +789,7 @@ async fn try_main() -> anyhow::Result<()> {
         anomaly_detector: anomaly_detector.clone(),
         wasm_plugin_engine,
         is_production,
+        tls_configured,
         connection_drainer: connection_drainer.clone(),
         rule_stats_tracker: rule_stats_tracker.clone(),
     });
@@ -744,6 +799,20 @@ async fn try_main() -> anyhow::Result<()> {
         argus_core::scheduler::start_scheduler(scheduler_engine.into()).await;
     });
     info!("Scheduler background task started");
+
+    // Background reputation sync to eBPF data-plane
+    let state_bg = state.clone();
+    tokio::spawn(async move {
+        loop {
+            if let Some(ref db_pool) = state_bg.db_pool {
+                if let Err(e) = state_bg.reputation_manager.sync_reputation_flow(db_pool, &state_bg.ebpf_controller).await {
+                    tracing::error!("Reputation sync flow failed: {}", e);
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(300)).await;
+        }
+    });
+    info!("Reputation background sync task started");
 
     // Background GC tasks for engine memory cleanup
     let conn_tracker = state.connection_tracker.clone();
@@ -901,6 +970,11 @@ async fn try_main() -> anyhow::Result<()> {
             eprintln!("  ARGUS API — https://127.0.0.1:8443");
             eprintln!("  Health:     https://127.0.0.1:8443/health");
             eprintln!("  Admin user: {}", admin_user);
+            if admin_pass_set {
+                eprintln!("  Password:   set via ARGUS_ADMIN_PASS");
+            } else {
+                eprintln!("  Password:   randomly generated (check server logs or reset)");
+            }
             eprintln!("  TLS cert:   {}", cert_path);
             eprintln!("  ========================================");
             eprintln!();
@@ -939,14 +1013,11 @@ async fn try_main() -> anyhow::Result<()> {
             eprintln!("  ARGUS API — http://127.0.0.1:8443");
             eprintln!("  Health:     http://127.0.0.1:8443/health");
             eprintln!("  Admin user: {}", admin_user);
-            eprintln!(
-                "  Password:   {} (default, change in Settings)",
-                if std::env::var("ARGUS_ADMIN_PASS").is_ok() {
-                    "set via ARGUS_ADMIN_PASS"
-                } else {
-                    "123456"
-                }
-            );
+            if admin_pass_set {
+                eprintln!("  Password:   set via ARGUS_ADMIN_PASS");
+            } else {
+                eprintln!("  Password:   randomly generated (check server logs or reset)");
+            }
             eprintln!("  ========================================");
             eprintln!("  WARNING: No TLS configured — all traffic in cleartext");
             eprintln!("  Set ARGUS_TLS_CERT and ARGUS_TLS_KEY env vars for TLS");
@@ -999,6 +1070,4 @@ async fn shutdown_signal() {
     }
 
     info!("Signal received, starting graceful shutdown");
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    info!("Shutdown complete");
 }

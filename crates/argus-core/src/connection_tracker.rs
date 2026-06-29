@@ -25,9 +25,10 @@ pub struct ConnectionKey {
 
 impl ConnectionTracker {
     pub fn new(max_entries: usize, gc_interval_secs: u64) -> Self {
+        let clamped = max_entries.clamp(1, 1_048_576);
         Self {
-            connections: Mutex::new(HashMap::with_capacity(max_entries.min(65536))),
-            max_entries,
+            connections: Mutex::new(HashMap::with_capacity(std::cmp::min(clamped, 65536))),
+            max_entries: clamped,
             gc_interval_secs,
             on_new_connection: None,
         }

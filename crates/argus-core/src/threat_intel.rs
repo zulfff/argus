@@ -5,6 +5,7 @@ use std::net::IpAddr;
 use std::sync::Mutex;
 use std::time::Duration;
 use tracing::{info, instrument, warn};
+use uuid::Uuid;
 
 use argus_common::error::{ArgusError, Result};
 
@@ -12,14 +13,46 @@ const BLOCKLIST_TTL_SECONDS: i64 = 86400;
 const REFRESH_INTERVAL_SECS: u64 = 3600;
 const MAX_BLOCKLIST_SIZE: usize = 1_000_000;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ThreatEntry {
-    pub ip: IpAddr,
+    pub id: Uuid,
+    pub ip_address: Option<IpAddr>,
     pub cidr: Option<String>,
     pub source: String,
-    pub reason: String,
+    pub reason: Option<String>,
     pub added_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    pub last_seen: Option<DateTime<Utc>>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct ThreatEntryRow {
+    pub id: Uuid,
+    pub ip_address: Option<String>,
+    pub cidr: Option<String>,
+    pub source: String,
+    pub reason: Option<String>,
+    pub added_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+    pub last_seen: Option<DateTime<Utc>>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+impl From<ThreatEntryRow> for ThreatEntry {
+    fn from(row: ThreatEntryRow) -> Self {
+        Self {
+            id: row.id,
+            ip_address: row.ip_address.and_then(|ip| ip.parse().ok()),
+            cidr: row.cidr,
+            source: row.source,
+            reason: row.reason,
+            added_at: row.added_at,
+            expires_at: row.expires_at,
+            last_seen: row.last_seen,
+            metadata: row.metadata,
+        }
+    }
 }
 
 pub struct ThreatIntelligence {
@@ -151,12 +184,15 @@ impl ThreatIntelligence {
                     entries.insert(
                         ip,
                         ThreatEntry {
-                            ip,
+                            id: Uuid::new_v4(),
+                            ip_address: Some(ip),
                             cidr: None,
                             source: "AbuseIPDB".into(),
-                            reason,
+                            reason: Some(reason),
                             added_at: now,
                             expires_at: now + chrono::Duration::seconds(ttl_hours),
+                            last_seen: None,
+                            metadata: None,
                         },
                     );
                     count += 1;
@@ -172,7 +208,7 @@ impl ThreatIntelligence {
     pub fn is_blocked(&self, ip: IpAddr) -> bool {
         let now = Utc::now();
         let Ok(entries) = self.entries.lock() else {
-            return true;
+            return false;
         };
         if entries.get(&ip).is_some_and(|e| e.expires_at > now) {
             return true;
@@ -258,6 +294,15 @@ impl ThreatIntelligence {
                 continue;
             }
 
+            if entries.len() >= MAX_BLOCKLIST_SIZE {
+                warn!(
+                    "Blocklist full at {} entries, stopping parse of {}",
+                    entries.len(),
+                    source
+                );
+                break;
+            }
+
             let cidr = line.split(';').next().unwrap_or(line).trim();
 
             if cidr.contains('/') {
@@ -266,34 +311,47 @@ impl ThreatIntelligence {
                     entries.insert(
                         base_ip,
                         ThreatEntry {
-                            ip: base_ip,
+                            id: Uuid::new_v4(),
+                            ip_address: Some(base_ip),
                             cidr: Some(cidr.to_string()),
                             source: source.to_string(),
-                            reason: format!("{} blocklist", source),
+                            reason: Some(format!("{} blocklist", source)),
                             added_at: now,
                             expires_at,
+                            last_seen: None,
+                            metadata: None,
                         },
                     );
-                    cidr_entries.push(ThreatEntry {
-                        ip: base_ip,
-                        cidr: Some(cidr.to_string()),
-                        source: source.to_string(),
-                        reason: format!("{} blocklist", source),
-                        added_at: now,
-                        expires_at,
-                    });
+                    if let Some(existing) = cidr_entries.iter_mut().find(|e| e.cidr.as_deref() == Some(cidr)) {
+                        existing.expires_at = expires_at;
+                    } else {
+                        cidr_entries.push(ThreatEntry {
+                            id: Uuid::new_v4(),
+                            ip_address: Some(base_ip),
+                            cidr: Some(cidr.to_string()),
+                            source: source.to_string(),
+                            reason: Some(format!("{} blocklist", source)),
+                            added_at: now,
+                            expires_at,
+                            last_seen: None,
+                            metadata: None,
+                        });
+                    }
                     count += 1;
                 }
             } else if let Ok(ip) = cidr.parse::<IpAddr>() {
                 entries.insert(
                     ip,
                     ThreatEntry {
-                        ip,
+                        id: Uuid::new_v4(),
+                        ip_address: Some(ip),
                         cidr: None,
                         source: source.to_string(),
-                        reason: format!("{} blocklist", source),
+                        reason: Some(format!("{} blocklist", source)),
                         added_at: now,
                         expires_at,
+                        last_seen: None,
+                        metadata: None,
                     },
                 );
                 count += 1;
@@ -316,7 +374,7 @@ impl ThreatIntelligence {
             .map(|e| {
                 e.values()
                     .filter(|entry| entry.expires_at > now)
-                    .map(|entry| entry.ip)
+                    .filter_map(|entry| entry.ip_address)
                     .collect()
             })
             .unwrap_or_default()
@@ -366,12 +424,15 @@ mod tests {
             entries.insert(
                 ip,
                 ThreatEntry {
-                    ip,
+                    id: Uuid::new_v4(),
+                    ip_address: Some(ip),
                     cidr: None,
                     source: "test".into(),
-                    reason: "test".into(),
+                    reason: Some("test".into()),
                     added_at: past,
                     expires_at: past,
+                    last_seen: None,
+                    metadata: None,
                 },
             );
         }

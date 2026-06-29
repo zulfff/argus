@@ -53,7 +53,7 @@ pub async fn submit_request(
     }
     let req = state.vpn_portal.submit_request(
         &claims.username,
-        &payload.public_key,
+        key,
         &payload.allowed_ips,
     );
     Ok(Json(req))

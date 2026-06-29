@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import * as api from '../api.js';
 import { PageHeader, LoadingError } from '../components/Shared.jsx';
+import ThreatVisualizer from '../components/ThreatVisualizer.jsx';
 
 const cardCls = "bg-white border border-[var(--color-bg-border)] rounded-lg p-5 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-shadow";
 
@@ -98,7 +99,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className={cardCls}>
+      <div className={cardCls + " mb-6"}>
         <div className="text-[var(--color-text)] text-sm font-semibold mb-4">Live Event Feed</div>
         <div className="max-h-80 overflow-y-auto space-y-2">
           {liveEvents.length === 0 ? (
@@ -114,6 +115,10 @@ export default function Dashboard() {
             ))
           )}
         </div>
+      </div>
+
+      <div className="mb-6">
+        <ThreatVisualizer />
       </div>
     </div>
   );

@@ -13,7 +13,7 @@ Restart=always
 RestartSec=5
 Environment=RUST_LOG=argus=info
 EnvironmentFile=/etc/argus/env
-AmbientCapabilities=CAP_NET_ADMIN CAP_SYS_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN CAP_BPF CAP_NET_RAW
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

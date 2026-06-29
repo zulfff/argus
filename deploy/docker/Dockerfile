@@ -19,12 +19,12 @@ COPY --from=builder /argus-api /usr/local/bin/argus-api
 COPY --from=builder /argus-cli /usr/local/bin/argus-cli
 COPY deploy/docker/entrypoint.sh /entrypoint.sh
 
-RUN addgroup -S argus && adduser -S argus -G argus && \
+RUN addgroup --system argus && adduser --system --ingroup argus argus && \
     mkdir -p /var/lib/argus && chown -R argus:argus /var/lib/argus && \
     chmod +x /entrypoint.sh
 
 EXPOSE 8443
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
-  CMD wget -qO- http://localhost:8443/health || exit 1
+  CMD wget --no-check-certificate -qO- https://localhost:8443/health || exit 1
 USER argus
 ENTRYPOINT ["/entrypoint.sh"]

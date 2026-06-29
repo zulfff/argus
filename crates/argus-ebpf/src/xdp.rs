@@ -12,6 +12,7 @@ use network_types::{
 use crate::maps::{
     CONNTRACK, DST_ALLOWLIST, DST_ALLOWLIST_V6, DST_BLOCKLIST, DST_BLOCKLIST_V6, PER_CPU_PACKETS,
     RATE_LIMIT_BUCKETS, SRC_ALLOWLIST, SRC_ALLOWLIST_V6, SRC_BLOCKLIST, SRC_BLOCKLIST_V6,
+    IP_REPUTATION_V4, IP_REPUTATION_V6, THREAT_STATS, EVENTS, ThreatCounter,
 };
 
 const ETH_HDR_LEN: usize = core::mem::size_of::<EthHdr>();
@@ -84,6 +85,34 @@ unsafe fn handle_ipv4(_ctx: XdpContext, data: usize, data_end: usize) -> Result<
     let src_key = Key::new(32, src_ip);
     let dst_key = Key::new(32, dst_ip);
 
+    // Dynamic IP Reputation Checks (v4)
+    if let Some(rep) = IP_REPUTATION_V4.get(&src_key) {
+        if rep.score <= -50 {
+            // Update THREAT_STATS drops count
+            if let Some(counter) = THREAT_STATS.get_ptr_mut(&src_ip) {
+                unsafe {
+                    (*counter).drops = (*counter).drops.wrapping_add(1);
+                    (*counter).last_seen = aya_ebpf::helpers::bpf_ktime_get_ns();
+                }
+            } else {
+                let init_counter = ThreatCounter {
+                    drops: 1,
+                    last_seen: aya_ebpf::helpers::bpf_ktime_get_ns(),
+                };
+                let _ = THREAT_STATS.insert(&src_ip, &init_counter, 0);
+            }
+
+            // Emit Event using EVENTS channel
+            let mut buf = [0u8; 256];
+            buf[0] = 1; // event type: 1 = reputation block
+            buf[1..5].copy_from_slice(&src_ip.to_be_bytes());
+            buf[5..9].copy_from_slice(&rep.score.to_be_bytes());
+            let _ = EVENTS.output(&_ctx, &buf, 0);
+
+            return Ok(xdp_action::XDP_DROP);
+        }
+    }
+
     if SRC_BLOCKLIST.get(&src_key).is_some() || DST_BLOCKLIST.get(&dst_key).is_some() {
         return Ok(xdp_action::XDP_DROP);
     }
@@ -153,6 +182,35 @@ unsafe fn handle_ipv6(_ctx: XdpContext, data: usize, data_end: usize) -> Result<
 
     let src_key = Key::new(128, src_addr);
     let dst_key = Key::new(128, dst_addr);
+
+    // Dynamic IP Reputation Checks (v6)
+    if let Some(rep) = IP_REPUTATION_V6.get(&src_key) {
+        if rep.score <= -50 {
+            // Update THREAT_STATS drops count (use lower 32-bits hash of v6 src_addr as key)
+            let src_ip_hash = (src_addr as u32) ^ ((src_addr >> 32) as u32);
+            if let Some(counter) = THREAT_STATS.get_ptr_mut(&src_ip_hash) {
+                unsafe {
+                    (*counter).drops = (*counter).drops.wrapping_add(1);
+                    (*counter).last_seen = aya_ebpf::helpers::bpf_ktime_get_ns();
+                }
+            } else {
+                let init_counter = ThreatCounter {
+                    drops: 1,
+                    last_seen: aya_ebpf::helpers::bpf_ktime_get_ns(),
+                };
+                let _ = THREAT_STATS.insert(&src_ip_hash, &init_counter, 0);
+            }
+
+            // Emit Event using EVENTS channel
+            let mut buf = [0u8; 256];
+            buf[0] = 2; // event type: 2 = reputation block v6
+            buf[1..17].copy_from_slice(&src_addr.to_be_bytes());
+            buf[17..21].copy_from_slice(&rep.score.to_be_bytes());
+            let _ = EVENTS.output(&_ctx, &buf, 0);
+
+            return Ok(xdp_action::XDP_DROP);
+        }
+    }
 
     if SRC_BLOCKLIST_V6.get(&src_key).is_some() || DST_BLOCKLIST_V6.get(&dst_key).is_some() {
         return Ok(xdp_action::XDP_DROP);

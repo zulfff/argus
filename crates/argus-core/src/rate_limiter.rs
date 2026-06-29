@@ -28,6 +28,9 @@ impl RateLimiter {
 
     #[instrument(skip(self))]
     pub fn check_and_consume(&self, ip: IpAddr, cost: f64) -> bool {
+        if cost.is_nan() || cost <= 0.0 || cost > self.default_max_tokens {
+            return false;
+        }
         let now = Utc::now();
         let mut buckets = match self.buckets.lock() {
             Ok(b) => b,

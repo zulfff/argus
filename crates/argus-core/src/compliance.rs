@@ -41,6 +41,9 @@ impl ComplianceEngine {
         };
         if let Ok(mut reports) = self.reports.lock() {
             reports.push(report.clone());
+            while reports.len() > 1000 {
+                reports.remove(0);
+            }
         }
         report
     }

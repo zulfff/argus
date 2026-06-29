@@ -1,4 +1,4 @@
-use axum::{extract::State, Extension, Json};
+use axum::{extract::State, http::StatusCode, Extension, Json};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -24,8 +24,14 @@ pub struct DeadRulesResponse {
 
 pub async fn get_rule_stats(
     State(state): State<Arc<AppState>>,
-    Extension(_claims): Extension<Claims>,
-) -> Json<Vec<RuleStatsResponse>> {
+    Extension(claims): Extension<Claims>,
+) -> Result<Json<Vec<RuleStatsResponse>>, (StatusCode, Json<serde_json::Value>)> {
+    if !claims.role.can_read() {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
+    }
     let stats = state.rule_stats_tracker.list_all();
     let rules = state
         .rule_engine
@@ -51,13 +57,19 @@ pub async fn get_rule_stats(
         })
         .collect();
 
-    Json(response)
+    Ok(Json(response))
 }
 
 pub async fn get_top_rules(
     State(state): State<Arc<AppState>>,
-    Extension(_claims): Extension<Claims>,
-) -> Json<Vec<RuleStatsResponse>> {
+    Extension(claims): Extension<Claims>,
+) -> Result<Json<Vec<RuleStatsResponse>>, (StatusCode, Json<serde_json::Value>)> {
+    if !claims.role.can_read() {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
+    }
     let stats = state.rule_stats_tracker.top_rules(10);
     let rules = state
         .rule_engine
@@ -83,7 +95,7 @@ pub async fn get_top_rules(
         })
         .collect();
 
-    Json(response)
+    Ok(Json(response))
 }
 
 #[derive(Deserialize)]
@@ -98,9 +110,15 @@ fn default_min_age_days() -> u32 {
 
 pub async fn get_dead_rules(
     State(state): State<Arc<AppState>>,
-    Extension(_claims): Extension<Claims>,
+    Extension(claims): Extension<Claims>,
     axum::extract::Query(query): axum::extract::Query<DeadRulesQuery>,
-) -> Json<DeadRulesResponse> {
+) -> Result<Json<DeadRulesResponse>, (StatusCode, Json<serde_json::Value>)> {
+    if !claims.role.can_read() {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Insufficient permissions", "code": 403})),
+        ));
+    }
     let rules = state
         .rule_engine
         .store()
@@ -111,9 +129,9 @@ pub async fn get_dead_rules(
     let min_age_secs = (query.min_age_days as i64) * 86400;
     let dead = state.rule_stats_tracker.dead_rules(&rule_ids, min_age_secs);
 
-    Json(DeadRulesResponse {
+    Ok(Json(DeadRulesResponse {
         dead_rules: dead,
         total_rules: rule_ids.len(),
         min_age_days: query.min_age_days,
-    })
+    }))
 }

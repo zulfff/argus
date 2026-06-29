@@ -34,6 +34,11 @@ fn hash_password(password: &str) -> Result<String, String> {
         .map(|h| h.to_string())
 }
 
+pub fn hash_password_for_restore() -> String {
+    let random_pass = Uuid::new_v4().to_string();
+    hash_password(&random_pass).unwrap_or_else(|_| String::new())
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
@@ -46,6 +51,7 @@ pub struct Claims {
     pub aud: String,
     pub jti: String,
     pub token_type: String,
+    pub parent_jti: Option<String>,
 }
 
 impl std::fmt::Debug for Claims {
@@ -206,13 +212,14 @@ impl UserStore {
         username: &str,
         password_hash: &str,
         role: Role,
+        enabled: bool,
     ) -> Result<User, String> {
         let user = User {
             id: Uuid::new_v4(),
             username: username.to_string(),
             password_hash: password_hash.to_string(),
             role,
-            enabled: true,
+            enabled,
         };
 
         self.users
@@ -228,10 +235,13 @@ impl UserStore {
     }
 
     pub async fn verify_password(&self, username: &str, password: &str) -> Option<User> {
-        let user = self.find_by_username(username).await?;
-        if !user.enabled {
+        let user = self.find_by_username(username).await;
+        if user.is_none() || user.as_ref().is_some_and(|u| !u.enabled) {
+            let dummy = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$dummy-salt-16-bytes-x$dummy-hash-32-bytes-0000000000000000").ok()?;
+            let _ = Argon2::default().verify_password(password.as_bytes(), &dummy);
             return None;
         }
+        let user = user?;
 
         let parsed_hash = PasswordHash::new(&user.password_hash).ok()?;
         let argon2 = Argon2::default();
@@ -347,6 +357,7 @@ impl JwtAuth {
             aud: "argus-api".into(),
             jti: Uuid::new_v4().to_string(),
             token_type: "access".into(),
+            parent_jti: None,
         };
 
         let access_token = encode(&Header::default(), &access_claims, &self.encoding_key)
@@ -363,6 +374,7 @@ impl JwtAuth {
             aud: "argus-api".into(),
             jti: Uuid::new_v4().to_string(),
             token_type: "refresh".into(),
+            parent_jti: None,
         };
 
         let refresh_token = encode(&Header::default(), &refresh_claims, &self.encoding_key)
@@ -416,7 +428,8 @@ impl JwtAuth {
                 Ok(f) => f,
                 Err(_) => return Err("internal error".to_string()),
             };
-            if revoked.contains(&claims.sub) {
+            let family_id = claims.parent_jti.as_ref().unwrap_or(&claims.jti);
+            if revoked.contains(family_id) {
                 return Err("token family revoked".to_string());
             }
         }
@@ -438,7 +451,8 @@ impl JwtAuth {
                         Ok(r) => r,
                         Err(_) => return Err("internal error".to_string()),
                     };
-                    revoked.insert(claims.sub.clone());
+                    let family_id = claims.parent_jti.as_ref().unwrap_or(&claims.jti);
+                    revoked.insert(family_id.clone());
                     return Err("refresh token reused — family revoked".to_string());
                 }
             } else {
@@ -462,6 +476,7 @@ impl JwtAuth {
             aud: "argus-api".into(),
             jti: Uuid::new_v4().to_string(),
             token_type: "access".into(),
+            parent_jti: Some(claims.parent_jti.clone().unwrap_or_else(|| claims.jti.clone())),
         };
 
         let refresh_claims = Claims {
@@ -475,6 +490,7 @@ impl JwtAuth {
             aud: "argus-api".into(),
             jti: Uuid::new_v4().to_string(),
             token_type: "refresh".into(),
+            parent_jti: Some(claims.parent_jti.clone().unwrap_or_else(|| claims.jti.clone())),
         };
 
         let access_token = encode(&Header::default(), &access_claims, &self.encoding_key)

@@ -27,10 +27,26 @@ impl From<AlertRule> for AlertRuleResponse {
             id: r.id,
             name: r.name,
             condition: r.condition,
-            channels: r.channels,
+            channels: r.channels.into_iter().map(redact_channel).collect(),
             enabled: r.enabled,
             cooldown_secs: r.cooldown_secs,
         }
+    }
+}
+
+fn redact_channel(ch: NotificationChannel) -> NotificationChannel {
+    let mut config = ch.config.clone();
+    let map = config.as_object_mut();
+    if let Some(map) = map {
+        for key in &["webhook_url", "url", "smtp_url", "to", "from"] {
+            if map.contains_key(*key) {
+                map.insert(key.to_string(), serde_json::Value::String("[REDACTED]".into()));
+            }
+        }
+    }
+    NotificationChannel {
+        channel_type: ch.channel_type,
+        config,
     }
 }
 
@@ -91,7 +107,7 @@ pub async fn create_alert_rule(
 
     // Validate notification channel URLs block SSRF
     for channel in &req.channels {
-        for key in &["url", "webhook_url"] {
+        for key in &["url", "webhook_url", "smtp_url"] {
             if let Some(url) = channel.config.get(key).and_then(|v| v.as_str()) {
                 validate_notification_url(url).map_err(|msg| {
                     (

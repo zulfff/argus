@@ -175,8 +175,13 @@ pub async fn import_rules(
     let mut imported = 0;
     let mut errors = Vec::new();
     for rule in export.rules {
-        match state.rule_engine.store().create_rule(rule).await {
-            Ok(_) => imported += 1,
+        match state.rule_engine.store().create_rule(rule.clone()).await {
+            Ok(_) => {
+                if let Err(e) = state.ebpf_controller.sync_rule_create(&rule) {
+                    tracing::warn!("eBPF sync failed for imported rule {}: {}", rule.id, e);
+                }
+                imported += 1;
+            }
             Err(e) => errors.push(e.to_string()),
         }
     }

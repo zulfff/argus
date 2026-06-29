@@ -13,7 +13,7 @@ pub async fn download_wg_config(
     Path(iface_name): Path<String>,
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    if !claims.role.can_read() {
+    if !claims.role.can_write() {
         return Err((
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({"error": "Insufficient permissions"})),

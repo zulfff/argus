@@ -253,6 +253,41 @@ impl MultiWanManager {
         let current_active = self.active_link.lock().expect("active lock").clone();
 
         if let Some(ref active_name) = current_active {
+            let primary_link = {
+                let links = self.links.lock().expect("links lock");
+                links.values().find(|l| l.is_primary).map(|l| l.name.clone())
+            };
+            if let Some(ref primary_name) = primary_link {
+                if active_name != primary_name {
+                    let primary_up = statuses
+                        .iter()
+                        .any(|s| s.link_name == *primary_name && s.active);
+                    if primary_up {
+                        warn!(
+                            current = %active_name,
+                            primary = %primary_name,
+                            "Primary WAN link is healthy — failing back"
+                        );
+                        let mut active = self.active_link.lock().expect("active lock");
+                        let old = active.replace(primary_name.clone());
+                        let event = FailoverEvent {
+                            timestamp: Utc::now(),
+                            from_link: old.unwrap_or_else(|| "none".into()),
+                            to_link: primary_name.clone(),
+                            reason: "primary link recovered (auto-failback)".into(),
+                            auto_recovery: true,
+                        };
+                        if let Ok(mut history) = self.failover_history.lock() {
+                            history.push(event.clone());
+                            if history.len() > 100 {
+                                history.drain(0..50);
+                            }
+                        }
+                        return Some(event);
+                    }
+                }
+            }
+
             let active_down = statuses
                 .iter()
                 .any(|s| s.link_name == *active_name && !s.active);

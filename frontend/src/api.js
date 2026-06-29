@@ -15,6 +15,11 @@ export function clearTokens() {
   if (onAuthChange) onAuthChange(false);
 }
 
+export function disconnectWebSocket() {
+  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+  if (ws) { ws.close(); ws = null; }
+}
+
 export function getAccessToken() { return accessToken; }
 
 export function onAuthStateChange(fn) { onAuthChange = fn; }
